@@ -1,0 +1,12 @@
+Package: twopiece
+Type: Package
+Title: The family of two piece distributions
+Version: 1.1.0
+Date: 2015-10-24
+Author: F. J. Rubio <fxrubio@gmail.com>, A. M. Lopez <amonteslop@gmail.com>, David Rossell <rosselldavid@gmail.com>.
+Maintainer: F. J. Rubio <fxrubio@gmail.com>
+Depends: R (>= 2.14.0), flexclust, methods, mvtnorm
+Imports: mclust
+Description: Density, distribution function, quantile function and random generation for the 3 and 4 parameter two piece distribution with 3 parameterizations. Multivariate versions, mixture models and model fitting algorithms are also available.
+License: GPL
+Collate: AllClasses.R AllGenerics.R dtp3.R dtp4.R ptp3.R ptp4.R qtp3.R qtp4.R rtp3.R rtp4.R skewtmix.R

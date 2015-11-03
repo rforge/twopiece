@@ -1,0 +1,5 @@
+import(flexclust,methods,mvtnorm)
+importFrom(mclust,Mclust)
+
+export(dtp3, dtp4, ptp3, ptp4, qtp3, qtp4, rtp3, rtp4, clusterprobs, dskewt, dmixskewt, mixskewtGibbs, priornuJS, priornuVW, rskewt, rmixskewt, skewtprior)
+
