@@ -10,7 +10,7 @@
   i.e. only consider integer values for the degrees of freedom.
 }
 \usage{
-priornuJS(nu,k=1.2,numax=30)
+priornuJS(nu,k=2.78,numax=30)
 
 priornuVW(nu,numax=30)
 }

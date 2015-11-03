@@ -21,11 +21,11 @@ setMethod("coef", signature(object="skewtFit"), function(object, ...) {
 
 
 #Compute cluster probabilities under skew-t mixture, averaging over posterior draws contained in x
-# - fit: object of type clusterprobs
+# - fit: object of type skewtFit
 # - x: data points at which to evaluate the probabilities
 # - iter: iterations of posterior draws over which to average. Defaults to using 1,000 equally spaced iterations.
 setMethod("clusterprobs", signature(fit='skewtFit'), function(fit, x, iter) {
-    if (missing(iter)) iter <- as.integer(seq(1,nrow(fit$probs),length=1000))
+    if (missing(iter)) iter <- as.integer(seq(1,nrow(fit$probs),length=min(nrow(fit$probs),1000)))
     if (!is.integer(iter)) stop("iter must contain integer iteration numbers")
     if ((min(iter)<1) | max(iter)>nrow(fit$mu[[1]])) stop("Specified iter values are out of valid range")
     if (missing(x)) stop("x values must be provided")
@@ -33,12 +33,12 @@ setMethod("clusterprobs", signature(fit='skewtFit'), function(fit, x, iter) {
     diag <- 1:G; nondiag <- (G+1):ncol(fit$Sigma[[1]])
     S <- lapply(1:G, function(i) { ans <- apply(fit$Sigma[[i]][iter,], 1, vec2matrix, diag=diag, nondiag=nondiag); array(as.vector(ans),dim=c(p,p,ncol(ans))) } )
     proboneiter <- function(i) {
-        dx <- sapply(1:G,function(g) dskewt(x,mu=fit$mu[[g]][i,],Sigma=S[[g]][,,i],alpha=fit$alpha[[g]][i,],nu=fit$nu[i,g],param='eps',logscale=TRUE,ttype=fit$ttype))
+        dx <- sapply(1:G,function(g) dskewt(x,mu=fit$mu[[g]][iter[i],],Sigma=S[[g]][,,i],alpha=fit$alpha[[g]][iter[i],],nu=fit$nu[iter[i],g],param='eps',logscale=TRUE,ttype=fit$ttype))
         dx <- t(t(dx)+log(fit$probs[i,]))
         dx <- exp(dx - apply(dx,1,max))
         dx/rowSums(dx)
     }
-    ans <- lapply(iter,function(i) proboneiter(i))
+    ans <- lapply(1:length(iter),function(i) proboneiter(i))
     ans <- Reduce('+',ans)/length(ans)
     return(ans)
 }
@@ -50,6 +50,34 @@ vec2matrix <- function(vec,diag,nondiag) {
     S[upper.tri(S)] <- S[lower.tri(S)] <- vec[nondiag]
     return(S)
 }
+
+
+fixLabelSwitch <- function(fit,x) {
+    #Permute component labels to avoid label switching issues. Components relabelled to have increasing projection on first PC
+    # Input
+    # - fit: object of type skewtFit
+    # - x: observed data used to obtain fit
+    # Output: object of type skewtFit with relabelled components
+    if (class(fit) != 'skewtFit') stop("fit must be of class skewtFit")
+    e <- eigen(cov(x))$vectors[,1,drop=FALSE]
+    proj <- do.call(cbind,lapply(fit$mu, "%*%", e))
+    r <- t(apply(proj,1,rank,ties.method='first'))
+    fitnew <- fit
+    for (g in 1:fit$G) {
+        glabel <- col(r)[r==g]  #for each MCMC iter sel indicates the component in fit corresponding to g^th reordered component in fitnew
+        for (gg in 1:fit$G) {
+            sel <- glabel==gg
+            fitnew$mu[[g]][sel,] <- fit$mu[[gg]][sel,]
+            fitnew$Sigma[[g]][sel,] <- fit$Sigma[[gg]][sel,]
+            fitnew$alpha[[g]][sel,] <- fit$alpha[[gg]][sel,]
+            fitnew$nu[sel,g] <- fit$nu[sel,gg]
+            fitnew$probs[sel,g] <- fit$probs[sel,gg]
+            if (!is.na(fit$cluster)) fitnew$cluster[fit$cluster==gg] <- g
+        }
+    }
+    return(fitnew)
+}
+
 
 
 ################################################################################################################
@@ -208,7 +236,7 @@ rmixskewt <- function(n,mu,Sigma,alpha,nu,probs,param='eps',ttype='independent')
 ################################################################################################################
 
 #Discretized Juarez-Steel gamma-gamma prior on degrees of freedom truncated to [1,numax]
-priornuJS <- function(nu,k=1.2,numax=30) {
+priornuJS <- function(nu,k=2.78,numax=30) {
     if (any(nu>numax)) stop("All elements in nu must be <=numax")
     if (any((nu %% 1) != 0)) stop("nu cannot have non-integer values")
     if (any(nu<=0)) stop("All elements in nu must be strictly positive")
@@ -301,7 +329,7 @@ rinvwishart <- function(nu, S, Sinv) {
 # - a, b: parameter for prior on asymetry parameter
 # - r: parameter for symmetric Dirichlet prior on mixing probabilities
 # - nuprobs: vector where P(nu=j)=nuprobs[j]. Names can be provided, else it is assumed that support of nu ranges from 1 to length(nuprobs)
-skewtprior <- function(p,m=rep(0,p),g=1,Q=diag(p),q=p+1,a=2,b=2,r=1/p,nuprobs=priornuJS(1:30,k=1.2,numax=30)) {
+skewtprior <- function(p,m=rep(0,p),g=1,Q=diag(p),q=p+1,a=2,b=2,r=1/p,nuprobs=priornuJS(1:30,k=2.78,numax=30)) {
     if (length(m) != p) stop("m has the wrong length")
     if (length(g)>1) stop("g must have length 1")
     if (!is.matrix(Q)) stop("Q must be a matrix")
@@ -400,8 +428,7 @@ mixskewtGibbs <- function(x, G, clusini='kmedians', priorParam=skewtprior(ncol(x
     Sigma <- lapply(1:G,function(i) matrix(NA,nrow=niter-burnin,ncol=p*(p+1)/2))
     alpha <- lapply(1:G,function(i) matrix(NA,nrow=niter-burnin,ncol=p))
     nu <- probs <- matrix(NA,nrow=niter-burnin,ncol=G)
-    probclus <- matrix(0,nrow=nrow(x),ncol=G); rownames(probclus) <- paste('indiv',1:n,sep='')
-    if (returnCluster) { cluster <- matrix(NA,nrow=niter-burnin,ncol=nrow(x)); colnames(cluster) <- rownames(probclus) }
+    if (returnCluster) { cluster <- matrix(NA,nrow=niter-burnin,ncol=nrow(x)); colnames(cluster) <- paste('indiv',1:n,sep='') }
     if (verbose) { niter10 <- round(niter/10); cat("Running MCMC") }
     for (l in 1:niter) {
         #Sample latent cluster indicators z
@@ -461,17 +488,22 @@ mixskewtGibbs <- function(x, G, clusini='kmedians', priorParam=skewtprior(ncol(x
             }
             nu[idx,] <- nucur
             probs[idx,] <- probscur
-            probclus <- probclus + dx
             if (returnCluster) cluster[idx,] <- z
         }
         if (verbose & ((l %% niter10)==0)) cat('.')
     }
     if (verbose) cat('\n')
-    names(mu) <- names(Sigma) <- names(alpha) <- colnames(nu) <- colnames(probs) <- colnames(probclus) <- paste('cluster',1:ncol(nu),sep='')
-    probclus <- probclus/(niter-burnin)
-    ans <- list(mu=mu,Sigma=Sigma,alpha=alpha,nu=nu,probs=probs,probcluster=probclus,cluster=NA,G=G,ttype=ttype)
+    names(mu) <- names(Sigma) <- names(alpha) <- colnames(nu) <- colnames(probs) <- paste('cluster',1:ncol(nu),sep='')
+    ans <- list(mu=mu,Sigma=Sigma,alpha=alpha,nu=nu,probs=probs,probcluster=NA,cluster=NA,G=G,ttype=ttype)
     if (returnCluster) ans$cluster <- cluster
-    return(new("skewtFit",ans))
+    fit <- new("skewtFit",ans)
+    #Fix potential label switching issues
+    fit <- fixLabelSwitch(fit,x=x)
+    #Compute cluster probabilities
+    fit$probcluster <- clusterprobs(fit, x=x)
+    rownames(fit$probcluster) <- paste('indiv',1:n,sep='')
+    colnames(fit$probcluster) <- paste('cluster',1:ncol(nu),sep='')
+    return(fit)
 }
 
 
@@ -698,7 +730,7 @@ rnuSkewtGibbs <- function(x, mu, Sigma, A, D, alpha, nuprobs, ttype) {
 # - alpha: vector with asymmetry coefficients
 # Return: value of nu
     nuvals <- as.numeric(names(nuprobs))
-    pp <- sapply(nuvals, function(v) sum(dskewt(x=x,mu=mu,A=A,D=D,alpha=alpha,nu=v,param='eps',logscale=TRUE,ttype=ttype))) + nuprobs
+    pp <- sapply(nuvals, function(v) sum(dskewt(x=x,mu=mu,A=A,D=D,alpha=alpha,nu=v,param='eps',logscale=TRUE,ttype=ttype))) + log(nuprobs)
     pp <- exp(pp - max(pp))
     pp <- pp/sum(pp)
     nuvals[match(TRUE,runif(1)<cumsum(pp))]
