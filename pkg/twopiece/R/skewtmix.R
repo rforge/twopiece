@@ -426,7 +426,9 @@ mixskewtGibbs <- function(x, G, clusini='kmedians', priorParam=skewtprior(ncol(x
         #Initialize w
         e <- eigen(Scur[[i]],symmetric=TRUE); Acur[[i]] <- t(e$vectors); Dcur[[i]] <- diag(e$values,ncol=p); Acur[[i]] <- Acur[[i]] * ifelse(sign(Acur[[i]][,1])== -1, -1, 1)
         if (length(sel)>0) {
-            txstd[,sel] <- sqrt(Dcur[[i]]) %*% Acur[[i]] %*% (tx[,sel] - mucur[[i]])
+            sqDcurinv <- diag(1/sqrt(diag(Dcur[[i]])),ncol=p)
+            txstd[,sel] <- sqDcurinv %*% Acur[[i]] %*% (tx[,sel] - mucur[[i]])
+            #txstd[,sel] <- sqrt(Dcur[[i]]) %*% Acur[[i]] %*% (tx[,sel] - mucur[[i]])
             xstd[sel,] <- t(txstd[,sel])
             xi[sel,] <- t((txstd[,sel]>=0) / (1-alphacur[[i]])^2 + (txstd[,sel]<0) / (1+alphacur[[i]])^2)
             #wcur[sel,] <- rwSkewtGibbs(xstd=xstd[sel,],xi=xi[sel,],nu=nucur[[i]],ttype=ttype)
@@ -452,8 +454,10 @@ mixskewtGibbs <- function(x, G, clusini='kmedians', priorParam=skewtprior(ncol(x
         for (g in 1:G) {
             sel <- which(z==g)
             if (length(sel)>0) {
+                sqDcurinv <- diag(1/sqrt(diag(Dcur[[g]])),ncol=p)
                 #Update precomputed stuff
-                txstd[,sel] <- sqrt(Dcur[[g]]) %*% Acur[[g]] %*% (tx[,sel] - mucur[[g]])
+                txstd[,sel] <- sqDcurinv %*% Acur[[g]] %*% (tx[,sel] - mucur[[g]])
+                #txstd[,sel] <- sqrt(Dcur[[g]]) %*% Acur[[g]] %*% (tx[,sel] - mucur[[g]])
                 xstd[sel,] <- t(txstd[,sel])
                 xi[sel,] <- t((txstd[,sel]>=0) / (1-alphacur[[g]])^2 + (txstd[,sel]<0) / (1+alphacur[[g]])^2)
                 #Sample w
@@ -462,13 +466,15 @@ mixskewtGibbs <- function(x, G, clusini='kmedians', priorParam=skewtprior(ncol(x
                 munew <- rmuSkewtGibbs(tx[,sel],mucur=mucur[[g]],Sigma=Scur[[g]],A=Acur[[g]],D=Dcur[[g]],w=wcur[sel,],alpha=alphacur[[g]],xi=xi[sel,],nu=nucur[[g]],ttype=ttype,m=m,g=gprior)
                 if (munew$accept) {
                     mucur[[g]] <- munew$mu
-                    txstd[,sel] <- sqrt(Dcur[[g]]) %*% Acur[[g]] %*% (tx[,sel] - mucur[[g]])
+                    txstd[,sel] <- sqDcurinv %*% Acur[[g]] %*% (tx[,sel] - mucur[[g]])
+                    #txstd[,sel] <- sqrt(Dcur[[g]]) %*% Acur[[g]] %*% (tx[,sel] - mucur[[g]])
                     xi[sel,] <- t((txstd[,sel]>=0) / (1-alphacur[[g]])^2 + (txstd[,sel]<0) / (1+alphacur[[g]])^2)
                 }
-                newS <- rSigmaSkewtGibbs(tx[,sel],mu=mucur[[g]],Sigmacur=Scur[[g]],Acur=Acur[[g]],Dcur=Dcur[[g]],w=wcur[sel,],alpha=alphacur[[g]],xi=xi[sel,],ttype=ttype,Q=Q,q=q)
+                newS <- rSigmaSkewtGibbs(tx[,sel],mu=mucur[[g]],Sigmacur=Scur[[g]],Acur=Acur[[g]],Dcur=Dcur[[g]],w=wcur[sel,],alpha=alphacur[[g]],nu=nucur[[g]],xi=xi[sel,],ttype=ttype,Q=Q,q=q)
                 if (newS$accept) {
                     Scur[[g]] <- newS$Sigmanew; Acur[[g]] <- newS$Anew; Dcur[[g]] <- newS$Dnew
-                    txstd[,sel] <- sqrt(Dcur[[g]]) %*% Acur[[g]] %*% (tx[,sel] - mucur[[g]])
+                    txstd[,sel] <- sqDcurinv %*% Acur[[g]] %*% (tx[,sel] - mucur[[g]])
+                    #txstd[,sel] <- sqrt(Dcur[[g]]) %*% Acur[[g]] %*% (tx[,sel] - mucur[[g]])
                     #xi[sel,] <- t((txstd[,sel]>=0) / (1-alphacur[[g]])^2 + (txstd[,sel]<0) / (1+alphacur[[g]])^2)  #xi not needed for alpha or nu
                 }
                 if (munew$accept | newS$accept) xstd[sel,] <- t(txstd[,sel])
@@ -505,13 +511,15 @@ mixskewtGibbs <- function(x, G, clusini='kmedians', priorParam=skewtprior(ncol(x
         }
         if (verbose & ((l %% niter10)==0)) cat('.')
     }
-    if (verbose) { cat('\n'); cat('Fixing potential label-switching...') }
     names(mu) <- names(Sigma) <- names(alpha) <- colnames(nu) <- colnames(probs) <- paste('cluster',1:ncol(nu),sep='')
     ans <- list(mu=mu,Sigma=Sigma,alpha=alpha,nu=nu,probs=probs,probcluster=NA,cluster=NA,G=G,ttype=ttype)
     if (returnCluster) ans$cluster <- cluster
     fit <- new("skewtFit",ans)
     #Fix potential label switching issues
-    fit <- fixLabelSwitch(fit,x=x,z=cluster,method='RW')
+    if (G>1) {
+        if (verbose) { cat('\n'); cat('Post-processing label-switching...') }
+        fit <- fixLabelSwitch(fit,x=x,z=cluster,method='RW')
+    }
     #Compute cluster probabilities
     fit$probcluster <- clusterprobs(fit, x=x)
     rownames(fit$probcluster) <- paste('indiv',1:n,sep='')
@@ -548,7 +556,7 @@ rmuSkewtGibbs <- function(tx,mucur,Sigma,A,D,w,alpha,xi,nu,ttype,m,g) {
     xiwinv <- diag(nrow(tphi)); diag(xiwinv) <- rowSums(tphi)
     #Parameters of proposal
     Vinv <- Sigmainv/g + t(sqDA) %*% xiwinv %*% sqDA
-    term1 <- t(sqDA) %*% (tphi * (sqDA %*% tx)) %*% matrix(1,nrow=ncol(tx))  #possible problem here
+    term1 <- t(sqDA) %*% (tphi * (sqDA %*% tx)) %*% matrix(1,nrow=ncol(tx))
     term2 <- g * Sigma %*% m
     V <- solve(Vinv)
     muprop <- V %*% (term1 + term2)
@@ -577,8 +585,62 @@ rmuSkewtGibbs <- function(tx,mucur,Sigma,A,D,w,alpha,xi,nu,ttype,m,g) {
 }
 
 
-rSigmaSkewtGibbs <- function(tx,mu,Sigmacur,Acur,Dcur,w,alpha,xi,ttype,Q=Q,q=q) {
-    #MH draws from conditional posterior of Sigma= t(A) %*% D %*% A given all other parameters
+rSigmaSkewtGibbsMarg <- function(tx,mu,Sigmacur,Acur,Dcur,alpha,nu,xi,ttype,Q=Q,q=q) {
+    #MH draws from posterior of Sigma= t(A) %*% D %*% A given all other parameters, but marginalized with respect to w
+    # Input
+    # - mu: mean vector
+    # - Sigmacur: current value of Sigma
+    # - Acur, Dcur: current value of A,D, i.e. Sigmacur= t(Acur) %*% Dcur %*% Acur
+    # - alpha: current value of asymmetry parameters
+    # - xi: (x>=0)/(1-alpha)^2 + (x<0)/(1+alpha)^2
+    # - ttype: independent or dependent skew-t
+    # - Q, q: prior on Sigma is InvWishart(Q,q), where q are the degrees of freedom
+    # Output: list with 2 components
+    # - Sigmanew: sampled value of Sigma (it may be equal to Sigmacur)
+    # - Anew: sampled value of A (it may be equal to Acur)
+    # - Dnew: sampled value of D (it may be equal to Dcur)
+    # - accept: indicates if Sigmanew==Sigmacur
+    #
+    n <- ncol(tx); p <- nrow(tx)
+    txmu <- tx-mu
+    #Proposal parameters
+    e <- eigen(cov(t(tx)))
+    Aprop <- t(e$vectors); Aprop <- Aprop * ifelse(sign(Aprop[, 1]) == -1, -1, 1)
+    txortho <- Aprop %*% txmu
+    xiprop <- t((txortho>=0) / (1-alpha)^2 + (txortho<0) / (1+alpha)^2)
+    xstd <- t(txortho) * sqrt(xiprop)
+    Dest <- diag(colSums(xstd^2),ncol=p)
+    Sprop <- Q + matrix(mu,ncol=1) %*% matrix(mu,nrow=1) + t(Aprop) %*% Dest %*% Aprop
+    #Propose new value
+    Sigmanew <- rinvwishart(n+q+p, Sprop)
+    e <- eigen(Sigmanew,symmetric=TRUE)
+    Anew <- t(e$vectors); Dnew <- diag(e$values,ncol=p); Dnewinv <- diag(1/e$values,ncol=p); Anew <- Anew * ifelse(sign(Anew[,1])== -1, -1, 1)
+    #Ratio of proposal densities
+    logpropcur <- diwishfast(Acur,diag(Dcur),n+q+p,Sprop,logscale=TRUE)
+    logpropnew <- diwishfast(Anew,diag(Dnew),n+q+p,Sprop,logscale=TRUE)
+    #Ratio of log-posterior densities
+    loglnew <- sum(dskewt(t(tx),mu=mu,A=Anew,D=Dnew,alpha=alpha,nu=nu,logscale=TRUE)) #unconditional on w
+    loglcur <- sum(dskewt(t(tx),mu=mu,A=Acur,D=Dcur,alpha=alpha,nu=nu,logscale=TRUE)) #unconditional on w
+    Dcurinv <- diag(1/diag(Dcur),ncol=p)
+    smunew <- matrix(mu,nrow=1) %*% t(Anew) %*% Dnewinv %*% Anew %*% matrix(mu,ncol=1)
+    smucur <- matrix(mu,nrow=1) %*% t(Acur) %*% Dcurinv %*% Acur %*% matrix(mu,ncol=1)
+    logpnew <- - 0.5*smunew + diwishfast(Anew,diag(Dnew),v=q+p,S=Q,logscale=TRUE)
+    logpcur <- - 0.5*smucur + diwishfast(Acur,diag(Dcur),v=q+p,S=Q,logscale=TRUE)
+    logposnew <- loglnew+logpnew
+    logposcur <- loglcur+logpcur
+    #Accept/reject move
+    u <- logposnew - logposcur + logpropcur - logpropnew
+    if (runif(1)<exp(u)) {
+        ans <- list(Sigmanew=Sigmanew,Anew=Anew,Dnew=Dnew,logposdif=logposnew-logposcur,logpropdif=logpropnew-logpropcur,accept=TRUE)
+    } else {
+        ans <- list(Sigmanew=Sigmacur,Anew=Acur,Dnew=Dcur,logposdif=logposnew-logposcur,logpropdif=logpropnew-logpropcur,accept=FALSE)
+    }
+    return(ans)
+}
+
+
+rSigmaSkewtGibbs <- function(tx,mu,Sigmacur,Acur,Dcur,w,alpha,nu,xi,ttype,Q=Q,q=q) {
+    #MH draws from posterior of Sigma= t(A) %*% D %*% A given all other parameters, also conditional on w
     # Input
     # - mu: mean vector
     # - Sigmacur: current value of Sigma
@@ -594,40 +656,33 @@ rSigmaSkewtGibbs <- function(tx,mu,Sigmacur,Acur,Dcur,w,alpha,xi,ttype,Q=Q,q=q) 
     # - Dnew: sampled value of D (it may be equal to Dcur)
     # - accept: indicates if Sigmanew==Sigmacur
     #
-    n <- nrow(xi); p <- ncol(xi)
-    #sqphi <- sqrt(xi/w)
+    n <- ncol(tx); p <- nrow(tx)
     txmu <- tx-mu
     #Proposal parameters
     e <- eigen(cov(t(tx)))
-    Aprop <- t(e$vectors); Aprop <- Aprop * ifelse(sign(Aprop[, 1]) == -1, -1, 1)
+    Aprop <- t(e$vectors); Aprop <- Aprop * ifelse(sign(Aprop[, 1]) == -1, -1, 1); Dprop <- diag(e$values,ncol=p)
     txortho <- Aprop %*% txmu
     xiprop <- t((txortho>=0) / (1-alpha)^2 + (txortho<0) / (1+alpha)^2)
-    sqphi <- sqrt(xiprop/w)
-    xstd <- t(txortho)*sqphi
+    xstd <- t(txortho) * sqrt(xiprop/w)
     Dest <- diag(colSums(xstd^2),ncol=p)
     Sprop <- Q + matrix(mu,ncol=1) %*% matrix(mu,nrow=1) + t(Aprop) %*% Dest %*% Aprop
     #Propose new value
     Sigmanew <- rinvwishart(n+q+p, Sprop)
     e <- eigen(Sigmanew,symmetric=TRUE)
     Anew <- t(e$vectors); Dnew <- diag(e$values,ncol=p); Dnewinv <- diag(1/e$values,ncol=p); Anew <- Anew * ifelse(sign(Anew[,1])== -1, -1, 1)
-    #Parameters for reverse proposal
-    #txstdnew <- Anew %*% txmu
-    #xinew <- t((txstdnew>=0) / (1-alpha)^2 + (txstdnew<0) / (1+alpha)^2)
-    #sqphinew <- sqrt(xinew/w)
-    #xorthonew <- t(txstdnew) * sqphinew
-    #Dtildenew <- diag(colSums(xorthonew^2),ncol=p)
-    #Spropnew <- Q + matrix(mu,ncol=1) %*% matrix(mu,nrow=1) + t(Anew) %*% Dtildenew %*% Anew
     #Ratio of proposal densities
     logpropcur <- diwishfast(Acur,diag(Dcur),n+q+p,Sprop,logscale=TRUE)
     logpropnew <- diwishfast(Anew,diag(Dnew),n+q+p,Sprop,logscale=TRUE)
     #Ratio of log-posterior densities
+    #loglnew <- sum(dskewt(t(tx),mu=mu,A=Anew,D=Dnew,alpha=alpha,nu=nu,logscale=TRUE)) #unconditional on w
+    loglnew <- loglSigma(txmu,Anew,Dnew,alpha,w)  #conditional on w
+    #loglnew <- sum(dmvnorm(t(txmu),sigma=t(Anew) %*% Dnew %*% Anew,log=TRUE)) #check: same result when alpha=0,w=1
+    #loglcur <- sum(dskewt(t(tx),mu=mu,A=Acur,D=Dcur,alpha=alpha,nu=nu,logscale=TRUE)) #unconditional on w
+    loglcur <- loglSigma(txmu,Acur,Dcur,alpha,w) #conditional on w
+    #loglcur <- sum(dmvnorm(t(txmu),sigma=t(Acur) %*% Dcur %*% Acur,log=TRUE)) #check: same result when alpha=0,w=1
     Dcurinv <- diag(1/diag(Dcur),ncol=p)
     smunew <- matrix(mu,nrow=1) %*% t(Anew) %*% Dnewinv %*% Anew %*% matrix(mu,ncol=1)
     smucur <- matrix(mu,nrow=1) %*% t(Acur) %*% Dcurinv %*% Acur %*% matrix(mu,ncol=1)
-    loglnew <- loglSigma(txmu,Anew,Dnew,alpha,w)
-    #loglnew <- sum(dmvnorm(t(txmu),sigma=t(Anew) %*% Dnew %*% Anew,log=TRUE)) #check: same result when alpha=0,w=1
-    loglcur <- loglSigma(txmu,Acur,Dcur,alpha,w)
-    #loglcur <- sum(dmvnorm(t(txmu),sigma=t(Acur) %*% Dcur %*% Acur,log=TRUE)) #check: same result when alpha=0,w=1
     logpnew <- - 0.5*smunew + diwishfast(Anew,diag(Dnew),v=q+p,S=Q,logscale=TRUE)
     logpcur <- - 0.5*smucur + diwishfast(Acur,diag(Dcur),v=q+p,S=Q,logscale=TRUE)
     logposnew <- loglnew+logpnew
@@ -654,63 +709,11 @@ loglSigma <- function(txmu,A,D,alpha,w) {
     #for (i in 1:ncol(xstd)) { ans <- ans + sum(dtp3(xstd[,i],mu=0,par1=1,par2=alpha[i],FUN=function(z,log) dt(z,log=log,df=10^6),param="eps",log=TRUE)) }
     #Option 2 (faster)
     xstd <- t(txortho) * sqrt(xi/w)
-    ans <- -0.5 * sum(xstd^2) - 0.5*nrow(xstd)*ncol(xstd)*log(2*pi)
-    #-0.5 * sum(xstd^2)
+    ans <- -0.5 * sum(xstd^2) -0.5*nrow(xstd)*sum(log(diag(D))) - 0.5*nrow(xstd)*ncol(xstd)*log(2*pi)
+    #-0.5 * sum(xstd^2) -0.5*sum(log(diag(D)))
     return(ans)
 }
 
-
-rSigmaSkewtGibbs.old <- function(tx,mu,Sigmacur,Acur,Dcur,w,alpha,xi,ttype,Q=Q,q=q) {
-    #MH draws from conditional posterior of Sigma= t(A) %*% D %*% A given all other parameters
-    # Input
-    # - mu: mean vector
-    # - Sigmacur: current value of Sigma
-    # - Acur, Dcur: current value of A,D, i.e. Sigmacur= t(Acur) %*% Dcur %*% Acur
-    # - w: current value of latent scale parameters
-    # - alpha: current value of asymmetry parameters
-    # - xi: (x>=0)/(1-alpha)^2 + (x<0)/(1+alpha)^2
-    # - ttype: independent or dependent skew-t
-    # - Q, q: prior on Sigma is InvWishart(Q,q), where q are the degrees of freedom
-    # Output: list with 2 components
-    # - Sigmanew: sampled value of Sigma (it may be equal to Sigmacur)
-    # - Anew: sampled value of A (it may be equal to Acur)
-    # - Dnew: sampled value of D (it may be equal to Dcur)
-    # - accept: indicates if Sigmanew==Sigmacur
-    #
-    n <- nrow(xi); p <- ncol(xi)
-    sqphi <- sqrt(xi/w)
-    txmu <- tx-mu
-    Dcurinv <- sqDcurinv <- diag(nrow(Dcur)); diag(Dcurinv) <- 1/diag(Dcur); diag(sqDcurinv) <- sqrt(diag(Dcurinv))
-    #Proposal parameters
-    xortho <- t(Acur %*% txmu) * sqphi
-    Sprop <- Q + matrix(mu,ncol=1) %*% matrix(mu,nrow=1) + t(Acur) %*% t(xortho) %*% xortho %*% Acur
-    Sigmanew <- rinvwishart(n+q+p, Sprop)  #used to be riwish
-    #Parameters for reverse proposal
-    e <- eigen(Sigmanew,symmetric=TRUE)
-    Anew <- t(e$vectors); Dnew <- Dnewinv <- diag(p); diag(Dnew) <- e$values; diag(Dnewinv) <- 1/e$values; Anew <- Anew * ifelse(sign(Anew[,1])== -1, -1, 1)
-    txstdnew <- sqrt(Dnew) %*% Anew %*% txmu
-    xinew <- t((txstdnew>=0) / (1-alpha)^2 + (txstdnew<0) / (1+alpha)^2)
-    sqphinew <- sqrt(xinew/w)
-    xorthonew <- t(Anew %*% txmu) * sqphinew
-    Spropnew <- Q + matrix(mu,ncol=1) %*% matrix(mu,nrow=1) + t(Anew) %*% t(xorthonew) %*% xorthonew %*% Anew
-    #Acceptance probability
-    logpropcur <- diwishfast(Acur,diag(Dcur),n+q+p,Spropnew,logscale=TRUE)
-    logpropnew <- diwishfast(Anew,diag(Dnew),n+q+p,Sprop,logscale=TRUE)
-    u <- logpropcur - logpropnew
-    txorthonew <- t(sqphinew) * (sqrt(Dnewinv) %*% Anew %*% txmu)
-    txorthocur <- t(sqphi) * (sqDcurinv %*% Acur %*% txmu)
-    smunew <- matrix(mu,nrow=1) %*% t(Anew) %*% Dnewinv %*% Anew %*% matrix(mu,ncol=1)
-    smucur <- matrix(mu,nrow=1) %*% t(Acur) %*% Dcurinv %*% Acur %*% matrix(mu,ncol=1)
-    logposnew <- -0.5 * (sum(txorthonew^2) + smunew) - 0.5*n*sum(log(diag(Dnew))) + diwishfast(Anew,diag(Dnew),v=q+p,S=Q,logscale=TRUE)
-    logposcur <- -0.5 * (sum(txorthocur^2) + smucur) - 0.5*n*sum(log(diag(Dcur))) + diwishfast(Acur,diag(Dcur),v=q+p,S=Q,logscale=TRUE)
-    u <- u + logposnew - logposcur
-    if (runif(1)<exp(u)) {
-        ans <- list(Sigmanew=Sigmanew,Anew=Anew,Dnew=Dnew,logposdif=logposnew-logposcur,logpropdif=logpropnew-logpropcur,accept=TRUE)
-    } else {
-        ans <- list(Sigmanew=Sigmacur,Anew=Acur,Dnew=Dcur,logposdif=logposnew-logposcur,logpropdif=logpropnew-logpropcur,accept=FALSE)
-    }
-    return(ans)
-}
 
 
 
@@ -723,10 +726,10 @@ rwSkewtGibbs <- function(xstd,xi,nu,ttype) {
     # - ttype: independent skew-t or dependent skew-t
     #Output: if ttype=='independent' a matrix with dim(xstd), else a matrix with nrow(xstd) rows and 1 column
     if (ttype=='independent') {
-        par1 <- (nu+1) / 2; par2 <- (nu + xstd^2) / 2
+        par1 <- (nu+1) / 2; par2 <- (nu + xi * xstd^2) / 2; #par2 <- (nu + xstd^2) / 2
         ans <- matrix(1/rgamma(nrow(xstd)*ncol(xstd),shape=par1,rate=par2), nrow=nrow(xstd), ncol=ncol(xstd))
     } else {
-        par1 <- (nu+ncol(xstd)) / 2; par2 <- (nu + rowSums(xstd^2)) / 2
+        par1 <- (nu+ncol(xstd)) / 2; par2 <- (nu + rowSums(xi * xstd^2)) / 2 #par2 <- (nu + rowSums(xstd^2)) / 2
         ans <- matrix(1/rgamma(nrow(xstd),shape=par1,rate=par2),ncol=1)
     }
     return(ans)
