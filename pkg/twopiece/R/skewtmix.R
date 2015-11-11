@@ -626,7 +626,7 @@ rSigmaSkewtGibbs <- function(tx,mu,Sigmacur,Acur,Dcur,w,alpha,xi,ttype,Q=Q,q=q) 
     smucur <- matrix(mu,nrow=1) %*% t(Acur) %*% Dcurinv %*% Acur %*% matrix(mu,ncol=1)
     loglnew <- loglSigma(txmu,Anew,Dnew,alpha,w)
     #loglnew <- sum(dmvnorm(t(txmu),sigma=t(Anew) %*% Dnew %*% Anew,log=TRUE)) #check: same result when alpha=0,w=1
-    loglcur <- loglSigma(txmu,Acur,Dcur,alpha,w)    
+    loglcur <- loglSigma(txmu,Acur,Dcur,alpha,w)
     #loglcur <- sum(dmvnorm(t(txmu),sigma=t(Acur) %*% Dcur %*% Acur,log=TRUE)) #check: same result when alpha=0,w=1
     logpnew <- - 0.5*smunew + diwishfast(Anew,diag(Dnew),v=q+p,S=Q,logscale=TRUE)
     logpcur <- - 0.5*smucur + diwishfast(Acur,diag(Dcur),v=q+p,S=Q,logscale=TRUE)
@@ -645,10 +645,18 @@ rSigmaSkewtGibbs <- function(tx,mu,Sigmacur,Acur,Dcur,w,alpha,xi,ttype,Q=Q,q=q) 
 
 loglSigma <- function(txmu,A,D,alpha,w) {
     #log-likelihood of (x-mu) evaluated at Sigma=t(A) D A, alpha, w
-    txstd <- diag(sqrt(1/diag(D)),ncol=ncol(D)) %*% A %*% txmu
-    xi <- t((txstd>=0) / (1-alpha)^2 + (txstd<0) / (1+alpha)^2)
-    sqphi <- sqrt(xi/w)
-    -0.5 * sum(txstd^2) - 0.5*ncol(txmu)*sum(log(diag(D)))
+    txortho <- diag(sqrt(1/diag(D)),ncol=ncol(D)) %*% A %*% txmu
+    xi <- t((txortho>=0) / (1-alpha)^2 + (txortho<0) / (1+alpha)^2)
+    #Option 1 (slower)
+    #xstd <- t(txortho) / w
+    #ans <- 0
+    #for (i in 1:ncol(xstd)) { ans <- ans + sum(dtp3(xstd[,i],mu=0,par1=1,par2=alpha[i],FUN=function(z,log) dnorm(z,log=log),param="eps",log=TRUE)) }
+    #for (i in 1:ncol(xstd)) { ans <- ans + sum(dtp3(xstd[,i],mu=0,par1=1,par2=alpha[i],FUN=function(z,log) dt(z,log=log,df=10^6),param="eps",log=TRUE)) }
+    #Option 2 (faster)
+    xstd <- t(txortho) * sqrt(xi/w)
+    ans <- -0.5 * sum(xstd^2) - 0.5*nrow(xstd)*ncol(xstd)*log(2*pi)
+    #-0.5 * sum(xstd^2)
+    return(ans)
 }
 
 
