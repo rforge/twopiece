@@ -10,8 +10,9 @@ setMethod("show", signature(object="skewtFit"), function(object) {
 
 setMethod("coef", signature(object="skewtFit"), function(object, ...) {
   mu <- lapply(object$mu,colMeans)
-  nondiag <- (object$G+1):ncol(object$Sigma[[1]])
-  Sigma <- lapply(object$Sigma, function(z) { colm <- colMeans(z); S <- diag(object$G); diag(S) <- colm[1:object$G]; S[upper.tri(S)] <- S[lower.tri(S)] <- colm[nondiag]; return(S) })
+  p <- length(mu[[1]])
+  diag <- 1:p; nondiag <- (p+1):ncol(object$Sigma[[1]])
+  Sigma <- lapply(object$Sigma, function(z) { colm <- colMeans(z); S <- diag(colm[diag],ncol=p); S[upper.tri(S)] <- S[lower.tri(S)] <- colm[nondiag]; return(S) })
   alpha <- lapply(object$alpha,colMeans)
   nu <- colMeans(object$nu)
   probs <- colMeans(object$probs)
@@ -25,12 +26,18 @@ setMethod("coef", signature(object="skewtFit"), function(object, ...) {
 # - x: data points at which to evaluate the probabilities
 # - iter: iterations of posterior draws over which to average. Defaults to using 1,000 equally spaced iterations.
 setMethod("clusterprobs", signature(fit='skewtFit'), function(fit, x, iter) {
-    if (missing(iter)) iter <- as.integer(seq(1,nrow(fit$probs),length=min(nrow(fit$probs),1000)))
+    if (missing(iter)) {
+        if (nrow(fit$probs)>1000) {
+            iter <- as.integer(seq(1,nrow(fit$probs),length=min(nrow(fit$probs),1000)))
+        } else {
+            iter <- 1:nrow(fit$probs)
+        }
+    }
     if (!is.integer(iter)) stop("iter must contain integer iteration numbers")
     if ((min(iter)<1) | max(iter)>nrow(fit$mu[[1]])) stop("Specified iter values are out of valid range")
     if (missing(x)) stop("x values must be provided")
     G <- fit$G; p <- ncol(fit$mu[[1]])
-    diag <- 1:G; nondiag <- (G+1):ncol(fit$Sigma[[1]])
+    diag <- 1:p; nondiag <- (p+1):ncol(fit$Sigma[[1]])
     S <- lapply(1:G, function(i) { ans <- apply(fit$Sigma[[i]][iter,], 1, vec2matrix, diag=diag, nondiag=nondiag); array(as.vector(ans),dim=c(p,p,ncol(ans))) } )
     proboneiter <- function(i) {
         dx <- sapply(1:G,function(g) dskewt(x,mu=fit$mu[[g]][iter[i],],Sigma=S[[g]][,,i],alpha=fit$alpha[[g]][iter[i],],nu=fit$nu[iter[i],g],param='eps',logscale=TRUE,ttype=fit$ttype))
@@ -461,34 +468,32 @@ mixskewtGibbs <- function(x, G, clusini='kmedians', priorParam=skewtprior(ncol(x
                 xstd[sel,] <- t(txstd[,sel])
                 xi[sel,] <- t((txstd[,sel]>=0) / (1-alphacur[[g]])^2 + (txstd[,sel]<0) / (1+alphacur[[g]])^2)
                 #Sample w
-                wcur[sel,] <- rwSkewtGibbs(xstd=xstd[sel,],xi=xi[sel,],nu=nucur[[g]],ttype=ttype)
+                wcur[sel,] <- rwSkewtGibbs(xstd=xstd[sel,,drop=FALSE],xi=xi[sel,,drop=FALSE],nu=nucur[[g]],ttype=ttype)
                 #Sample mu, Sigma
-                munew <- rmuSkewtGibbs(tx[,sel],mucur=mucur[[g]],Sigma=Scur[[g]],A=Acur[[g]],D=Dcur[[g]],w=wcur[sel,],alpha=alphacur[[g]],xi=xi[sel,],nu=nucur[[g]],ttype=ttype,m=m,g=gprior)
+                munew <- rmuSkewtGibbs(tx[,sel,drop=FALSE],mucur=mucur[[g]],Sigma=Scur[[g]],A=Acur[[g]],D=Dcur[[g]],w=wcur[sel,,drop=FALSE],alpha=alphacur[[g]],xi=xi[sel,,drop=FALSE],nu=nucur[[g]],ttype=ttype,m=m,g=gprior)
                 if (munew$accept) {
                     mucur[[g]] <- munew$mu
                     txstd[,sel] <- sqDcurinv %*% Acur[[g]] %*% (tx[,sel] - mucur[[g]])
-                    #txstd[,sel] <- sqrt(Dcur[[g]]) %*% Acur[[g]] %*% (tx[,sel] - mucur[[g]])
                     xi[sel,] <- t((txstd[,sel]>=0) / (1-alphacur[[g]])^2 + (txstd[,sel]<0) / (1+alphacur[[g]])^2)
                 }
-                newS <- rSigmaSkewtGibbs(tx[,sel],mu=mucur[[g]],Sigmacur=Scur[[g]],Acur=Acur[[g]],Dcur=Dcur[[g]],w=wcur[sel,],alpha=alphacur[[g]],nu=nucur[[g]],xi=xi[sel,],ttype=ttype,Q=Q,q=q)
+                newS <- rSigmaSkewtGibbs(tx[,sel,drop=FALSE],mu=mucur[[g]],Sigmacur=Scur[[g]],Acur=Acur[[g]],Dcur=Dcur[[g]],w=wcur[sel,,drop=FALSE],alpha=alphacur[[g]],nu=nucur[[g]],xi=xi[sel,,drop=FALSE],ttype=ttype,Q=Q,q=q)
                 if (newS$accept) {
                     Scur[[g]] <- newS$Sigmanew; Acur[[g]] <- newS$Anew; Dcur[[g]] <- newS$Dnew
                     txstd[,sel] <- sqDcurinv %*% Acur[[g]] %*% (tx[,sel] - mucur[[g]])
-                    #txstd[,sel] <- sqrt(Dcur[[g]]) %*% Acur[[g]] %*% (tx[,sel] - mucur[[g]])
                     #xi[sel,] <- t((txstd[,sel]>=0) / (1-alphacur[[g]])^2 + (txstd[,sel]<0) / (1+alphacur[[g]])^2)  #xi not needed for alpha or nu
                 }
-                if (munew$accept | newS$accept) xstd[sel,] <- t(txstd[,sel])
+                if (munew$accept | newS$accept) xstd[sel,] <- t(txstd[,sel,drop=FALSE])
                 #Sample alpha
-                alphanew <- ralphaSkewtGibbs(alphacur=alphacur[[g]],xstd=xstd[sel,],w=wcur[sel,],a=a,b=b,ttype=ttype)
+                alphanew <- ralphaSkewtGibbs(alphacur=alphacur[[g]],xstd=xstd[sel,,drop=FALSE],w=wcur[sel,,drop=FALSE],a=a,b=b,ttype=ttype)
                 alphacur[[g]] <- alphanew$alphanew
                 #xi[sel,] <- t((txstd[,sel]>=0) / (1-alphacur[[g]])^2 + (txstd[,sel]<0) / (1+alphacur[[g]])^2) #xi not needed for nu
                 #Sample nu
-                nucur[[g]] <- rnuSkewtGibbs(x=x[sel,],mu=mucur[[g]],A=Acur[[g]],D=Dcur[[g]],alpha=alphacur[[g]],nuprobs=nuprobs,ttype=ttype)
+                nucur[[g]] <- rnuSkewtGibbs(x=x[sel,,drop=FALSE],mu=mucur[[g]],A=Acur[[g]],D=Dcur[[g]],alpha=alphacur[[g]],nuprobs=nuprobs,ttype=ttype)
             } else {
                 #If no observations in cluster, sample from the prior
                 Scur[[g]] <- rinvwishart(q,Q)
                 e <- eigen(Scur[[g]],symmetric=TRUE); Acur[[g]] <- t(e$vectors); Dcur[[g]] <- diag(p); diag(Dcur[[g]]) <- e$values; Acur[[g]] <- Acur[[g]] * ifelse(sign(Acur[[g]][,1])== -1, -1, 1)
-                mucur[[g]] <- dmvnorm(1,m,gprior * Scur[[g]])
+                mucur[[g]] <- as.vector(rmvnorm(1,m,gprior * Scur[[g]]))
                 alphacur[[g]] <- 1 - 2*rbeta(p,a,b)
                 nucur[[g]] <- as.numeric(names(nuprobs)[rmultinom(n=1,size=1,prob=nuprobs)])
             }
@@ -604,13 +609,17 @@ rSigmaSkewtGibbsMarg <- function(tx,mu,Sigmacur,Acur,Dcur,alpha,nu,xi,ttype,Q=Q,
     n <- ncol(tx); p <- nrow(tx)
     txmu <- tx-mu
     #Proposal parameters
-    e <- eigen(cov(t(tx)))
-    Aprop <- t(e$vectors); Aprop <- Aprop * ifelse(sign(Aprop[, 1]) == -1, -1, 1)
-    txortho <- Aprop %*% txmu
-    xiprop <- t((txortho>=0) / (1-alpha)^2 + (txortho<0) / (1+alpha)^2)
-    xstd <- t(txortho) * sqrt(xiprop)
-    Dest <- diag(colSums(xstd^2),ncol=p)
-    Sprop <- Q + matrix(mu,ncol=1) %*% matrix(mu,nrow=1) + t(Aprop) %*% Dest %*% Aprop
+    if (n>1) {
+        e <- eigen(cov(t(tx)))
+        Aprop <- t(e$vectors); Aprop <- Aprop * ifelse(sign(Aprop[, 1]) == -1, -1, 1)
+        txortho <- Aprop %*% txmu
+        xiprop <- t((txortho>=0) / (1-alpha)^2 + (txortho<0) / (1+alpha)^2)
+        xstd <- t(txortho) * sqrt(xiprop)
+        Dest <- diag(colSums(xstd^2),ncol=p)
+        Sprop <- Q + matrix(mu,ncol=1) %*% matrix(mu,nrow=1) + t(Aprop) %*% Dest %*% Aprop
+    } else {
+        Sprop <- Q + matrix(mu,ncol=1) %*% matrix(mu,nrow=1) + tx %*% t(tx)
+    }
     #Propose new value
     Sigmanew <- rinvwishart(n+q+p, Sprop)
     e <- eigen(Sigmanew,symmetric=TRUE)
@@ -659,13 +668,17 @@ rSigmaSkewtGibbs <- function(tx,mu,Sigmacur,Acur,Dcur,w,alpha,nu,xi,ttype,Q=Q,q=
     n <- ncol(tx); p <- nrow(tx)
     txmu <- tx-mu
     #Proposal parameters
-    e <- eigen(cov(t(tx)))
-    Aprop <- t(e$vectors); Aprop <- Aprop * ifelse(sign(Aprop[, 1]) == -1, -1, 1); Dprop <- diag(e$values,ncol=p)
-    txortho <- Aprop %*% txmu
-    xiprop <- t((txortho>=0) / (1-alpha)^2 + (txortho<0) / (1+alpha)^2)
-    xstd <- t(txortho) * sqrt(xiprop/w)
-    Dest <- diag(colSums(xstd^2),ncol=p)
-    Sprop <- Q + matrix(mu,ncol=1) %*% matrix(mu,nrow=1) + t(Aprop) %*% Dest %*% Aprop
+    if (n>1) {
+        e <- eigen(cov(t(tx)))
+        Aprop <- t(e$vectors); Aprop <- Aprop * ifelse(sign(Aprop[, 1]) == -1, -1, 1); Dprop <- diag(e$values,ncol=p)
+        txortho <- Aprop %*% txmu
+        xiprop <- t((txortho>=0) / (1-alpha)^2 + (txortho<0) / (1+alpha)^2)
+        xstd <- t(txortho) * sqrt(xiprop/w)
+        Dest <- diag(colSums(xstd^2),ncol=p)
+        Sprop <- Q + matrix(mu,ncol=1) %*% matrix(mu,nrow=1) + t(Aprop) %*% Dest %*% Aprop
+    } else {
+        Sprop <- Q + matrix(mu,ncol=1) %*% matrix(mu,nrow=1) + tx %*% t(tx)
+    }
     #Propose new value
     Sigmanew <- rinvwishart(n+q+p, Sprop)
     e <- eigen(Sigmanew,symmetric=TRUE)
@@ -750,6 +763,7 @@ ralphaSkewtGibbs <- function(alphacur,xstd,w,a,b,ttype) {
         s1 <- colSums((xstd>=0) * xstd^2 / w)
         s2 <- colSums((xstd< 0) * xstd^2 / w)
     }
+    s1[s1==0] <- .0001; s2[s2==0] <- .0001
     alphaprop <- ralphaPropT(s1=s1,s2=s2,n=max(3,nrow(xstd)),a=a,b=b)
     u <- dt((alphacur-alphaprop$alpha.mode)/alphaprop$sd.mode,df=max(3,nrow(xstd)),log=TRUE) - alphaprop$logpdfProp
     #u <- dnorm(alphacur,alphaprop$alpha.mode,sd=alphaprop$sd.mode,log=TRUE) - alphaprop$logpdfProp
