@@ -51,6 +51,29 @@ setMethod("clusterprobs", signature(fit='skewtFit'), function(fit, x, iter) {
 }
 )
 
+loglmean <- function(fit,x) {
+    #log-likelihood evaluated at posterior mean
+    parest <- coef(fit)
+    sum(dmixskewt(x,mu=parest$mu,Sigma=parest$Sigma,alpha=parest$alpha,nu=parest$nu,probs=parest$probs,param='eps',logscale=TRUE,ttype=fit$ttype))
+}
+
+logl <- function(fit,x) {
+    #log-likelihood at each MCMC iteration
+    if (class(fit) != 'skewtFit') stop("fit must be of class skewtFit")
+    G <- fit$G; p <- ncol(fit$mu[[1]])
+    diag <- 1:p; nondiag <- (p+1):ncol(fit$Sigma[[1]])
+    S <- lapply(1:G, function(i) { ans <- apply(fit$Sigma[[i]], 1, vec2matrix, diag=diag, nondiag=nondiag); array(as.vector(ans),dim=c(p,p,ncol(ans))) } )
+    lhoodoneiter <- function(i) {
+        dx <- sapply(1:G,function(g) dskewt(x,mu=fit$mu[[g]][i,],Sigma=S[[g]][,,i],alpha=fit$alpha[[g]][i,],nu=fit$nu[i,g],param='eps',logscale=TRUE,ttype=fit$ttype))
+        dx <- t(t(dx)+log(fit$probs[i,]))
+        sum(log(rowSums(exp(dx))))
+    }
+    ans <- sapply(1:nrow(fit$mu[[1]]),function(i) lhoodoneiter(i))
+    ans
+}
+
+
+
 vec2matrix <- function(vec,diag,nondiag) {
     #Format input vector as symmetric matrix. Indices of diagonal elements are in diag, those on the upper triangle in nondiag
     S <- diag(length(diag)); diag(S) <- vec[diag]
@@ -246,6 +269,37 @@ rmixskewt <- function(n,mu,Sigma,alpha,nu,probs,param='eps',ttype='independent')
 }
 
 
+#Two-dimensional ellipse for skew-t distribution. level is the confidence level for the main axes along which asymmetry is defined
+tpellipse <- function(mu=c(0,0),Sigma=diag(2),alpha=c(0,0),nu=Inf,level=0.95) {
+    if (length(alpha) != 2) stop("tpellipse only available for two-dimensional data")
+    p <- length(mu)
+    if (length(alpha) != p) { if (length(alpha)==1) alpha <- rep(alpha,p) else stop("length(alpha) must be either 1 or length(mu)") }
+    #Eigendecomposition
+    e <- eigen(Sigma,symmetric=TRUE); A <- t(e$vectors); sqD <- diag(sqrt(e$values),p); A <- A * ifelse(sign(A[,1])== -1, -1, 1)
+    if (any(e$values<=0)) stop("Sigma is not positive definite")
+    #
+    e1 <- ellipse(diag(c(1/(1+alpha[1])^2,1/(1+alpha[2])^2)),npoints=1000,level=level)
+    e1 <- e1[e1[,1]>0 & e1[,2]>0,]
+    e1 <- e1[order(e1[,1]),]
+    #
+    e2 <- ellipse(diag(c(1/(1+alpha[1])^2,1/(1-alpha[2])^2)),npoints=1000,level=level)
+    e2 <- e2[e2[,1]>0 & e2[,2]<0,]
+    e2 <- e2[order(e2[,1],decreasing=TRUE),]
+    #
+    e3 <- ellipse(diag(c(1/(1-alpha[1])^2,1/(1-alpha[2])^2)),npoints=1000,level=level)
+    e3 <- e3[e3[,1]<0 & e3[,2]<0,]
+    e3 <- e3[order(e3[,1],decreasing=TRUE),]
+    #
+    e4 <- ellipse(diag(c(1/(1-alpha[1])^2,1/(1+alpha[2])^2)),npoints=1000,level=level)
+    e4 <- e4[e4[,1]<0 & e4[,2]>0,]
+    e4 <- e4[order(e4[,1]),]
+    #
+    e <- rbind(e1,e2,e3,e4,e1[1,]) * qt((1-level)/2,df=nu) / qnorm((1-level)/2)
+    ans <- t(t(A) %*% (sqD %*% t(e)) + mu)
+    return(ans)
+}
+
+
 ################################################################################################################
 ## ROUTINES TO EVALUATE PRIOR DISTRIBUTIONS
 ################################################################################################################
@@ -395,19 +449,21 @@ mixskewtGibbs <- function(x, G, clusini='kmedians', priorParam=skewtprior(ncol(x
     if (is.null(names(nuprobs))) { nuvals <- 1:length(nuprobs) } else { nuvals <- as.integer(names(nuprobs)) }
     r <- priorParam[['probs']]['r']
     ## Initial cluster allocations ##
-    if (is.character(clusini)) {
-        if (clusini=='kmedians') {
-            #require(flexclust)
-            z <- predict(cclust(x, k=G, dist='manhattan', method='kmeans'))
-        } else if (clusini=='kmeans') {
-            z <- kmeans(x, centers=G)$cluster
-        } else if (clusini=='em') {
-            #require(mclust)
-            z <- Mclust(x, G=G, modelNames='VVV')$classification
-        } else stop("Invalid value for 'clusini'")
+    if (G>1) {
+        if (is.character(clusini)) {
+            if (clusini=='kmedians') {
+                z <- predict(cclust(x, k=G, dist='manhattan', method='kmeans'))
+            } else if (clusini=='kmeans') {
+                z <- kmeans(x, centers=G)$cluster
+            } else if (clusini=='em') {
+                z <- Mclust(x, G=G, modelNames='VVV')$classification
+            } else stop("Invalid value for 'clusini'")
+        } else {
+            if (length(clusini) != nrow(x)) stop("length(clusini) must be equal to nrow(x)")
+            z <- as.integer(factor(clusini))
+        }
     } else {
-        if (length(clusini) != nrow(x)) stop("length(clusini) must be equal to nrow(x)")
-        z <- as.integer(factor(clusini))
+        z <- rep(1,nrow(x))
     }
     zcount <- rep(0,G); names(zcount) <- (1:G)
     tab <- table(z); zcount[names(tab)] <- tab
