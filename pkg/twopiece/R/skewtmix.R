@@ -12,7 +12,7 @@ setMethod("coef", signature(object="skewtFit"), function(object, ...) {
   mu <- lapply(object$mu,colMeans)
   p <- length(mu[[1]])
   diag <- 1:p; nondiag <- (p+1):ncol(object$Sigma[[1]])
-  Sigma <- lapply(object$Sigma, function(z) { colm <- colMeans(z); S <- diag(colm[diag],ncol=p); S[upper.tri(S)] <- S[lower.tri(S)] <- colm[nondiag]; return(S) })
+  Sigma <- lapply(object$Sigma, function(z) { vec2matrix(colMeans(z),diag=diag,nondiag=nondiag) })
   alpha <- lapply(object$alpha,colMeans)
   nu <- colMeans(object$nu)
   probs <- colMeans(object$probs)
@@ -76,8 +76,11 @@ logl <- function(fit,x) {
 
 vec2matrix <- function(vec,diag,nondiag) {
     #Format input vector as symmetric matrix. Indices of diagonal elements are in diag, those on the upper triangle in nondiag
-    S <- diag(length(diag)); diag(S) <- vec[diag]
-    S[upper.tri(S)] <- S[lower.tri(S)] <- vec[nondiag]
+    S <- diag(vec[diag],ncol=length(diag))
+    if (length(nondiag)>0) {
+        S[upper.tri(S)] <- vec[nondiag]
+        S <- S + t(S) - diag(diag(S))
+    }
     return(S)
 }
 
@@ -404,7 +407,7 @@ skewtprior <- function(p,m=rep(0,p),g=1,Q=diag(p),q=p+1,a=2,b=2,r=1/p,nuprobs=pr
     if (length(g)>1) stop("g must have length 1")
     if (!is.matrix(Q)) stop("Q must be a matrix")
     if ((nrow(Q) != ncol(Q)) | (nrow(Q) != p)) stop("Q must be a square matrix with p rows")
-    if (any(Q[upper.tri(Q)] != Q[lower.tri(Q)])) stop("Q must be symmetric")
+    #if (any(Q[upper.tri(Q)] != Q[lower.tri(Q)])) stop("Q must be symmetric")
     if (any(eigen(Q,symmetric=TRUE)$values <= 0)) stop("Q is not positive-definite!")
     if (q < p) stop("q must be >= p")
     if (length(r)>1) stop("r must have length 1")
