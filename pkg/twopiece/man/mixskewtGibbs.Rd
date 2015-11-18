@@ -6,7 +6,9 @@ Metropolis-Hastings within Gibbs algorithm to obtain posterior samples for
 a mixture of multivariate skew-t's.
 }
 \usage{
-mixskewtGibbs(x, G, clusini='kmedians', priorParam=skewtprior(ncol(x),G), niter, burnin=round(niter/10), ttype='independent', returnCluster=FALSE, verbose=TRUE)
+mixskewtGibbs(x, G, clusini='kmedians', priorParam=skewtprior(ncol(x),G), niter,
+burnin=round(niter/10), ttype='independent', returnCluster=FALSE, relabel='ECR',
+verbose=TRUE)
 }
 \arguments{
 \item{x}{Observed data matrix (observations in rows, variables in columns)}
@@ -31,6 +33,15 @@ See help(dskewt) for details}
 
 \item{returnCluster}{If set to TRUE the allocated cluster at each MCMC
 iteration is returned. Note that this can be memory-consuming if nrow(x) is large}
+
+\item{relabel}{Cluster relabelling algorithm. Set to 'none' to do no relabelling.
+'ECR' corresponds to the Papastimouis-Iliopoulos 2010 algorithm to make simulated
+cluster allocations similar to a pivot (taken to be the last MCMC iteration).
+Set to 'RW' for Rodriguez-Walker's (2014) proposal based on a loss function
+to preserve cluster means across iterations.
+Set to 'PC' for an artificial identifiability constraint based on projection
+of location parameters on first principal component.
+See help(label.switching) for details.}
 
 \item{verbose}{Set to TRUE to output iteration progress}
 }

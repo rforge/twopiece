@@ -85,16 +85,18 @@ vec2matrix <- function(vec,diag,nondiag) {
 }
 
 
-fixLabelSwitch <- function(fit,x,z,method='RW') {
+fixLabelSwitch <- function(fit,x,z,method='ECR') {
     #Permute component labels to avoid label switching issues. Components relabelled to have increasing projection on first PC
     # Input
     # - fit: object of type skewtFit
     # - x: observed data used to obtain fit
     # - z: latent cluster allocations at each MCMC iteration
-    # - method: 'RW' for Rodriguez-Walker (2014) relabelling (loss function aimed at preserving cluster means), 'PC' for identifiability constraint based on projection of location parameters on first principal component
+    # - method: 'ECR' for Papastamoulis-Iliopoulos 2010 to make simulated z similar to pivot z (taken from last iteration); 'RW' for Rodriguez-Walker (2014) relabelling (loss function aimed at preserving cluster means), 'PC' for identifiability constraint based on projection of location parameters on first principal component
     # Output: object of type skewtFit with relabelled components
     if (class(fit) != 'skewtFit') stop("fit must be of class skewtFit")
-    if (method=='RW') {
+    if (method=='ECR') {
+        r <- ecr(z[nrow(z),],z=z,K=fit$G)[[1]]
+    } else if (method=='RW') {
         r <- dataBased(x,K=fit$G,z)[[1]]
     } else if (method=='PC') {
         e <- eigen(cov(x))$vectors[,1,drop=FALSE]
@@ -111,7 +113,7 @@ fixLabelSwitch <- function(fit,x,z,method='RW') {
             fitnew$alpha[[g]][sel,] <- fit$alpha[[gg]][sel,]
             fitnew$nu[sel,g] <- fit$nu[sel,gg]
             fitnew$probs[sel,g] <- fit$probs[sel,gg]
-            if (!is.na(fit$cluster)) fitnew$cluster[fit$cluster==gg] <- g
+            if (!is.null(dim(fit$cluster))) fitnew$cluster[fit$cluster==gg] <- g
         }
     }
     return(fitnew)
@@ -433,6 +435,7 @@ skewtprior <- function(p,G,m=rep(0,p),g=1,Q=diag(p),q=p+1,a=2,b=2,r=1/G,nuprobs=
 # - niter: number of Gibbs iterations
 # - ttype: set to 'independent' for independent skew-t, to 'dependent' for dependent skew-t
 # - returnCluster: if set to TRUE the allocated cluster at each MCMC iteration is returned. This can be memory-consuming if nrow(x) is large.
+# - relabel: 'none' to do no relabelling. 'ECR' for Papastamoulis-Iliopoulos 2010 to make simulated z similar to pivot z (taken from last iteration); 'RW' for Rodriguez-Walker (2014) relabelling (loss function aimed at preserving cluster means), 'PC' for identifiability constraint based on projection of location parameters on first principal component
 # - verbose: set to TRUE to output iteration progress
 # Output:
 # - mu: list of length G, where mu[[i]] is a matrix with posterior draws (niter-burnin rows)
@@ -442,7 +445,7 @@ skewtprior <- function(p,G,m=rep(0,p),g=1,Q=diag(p),q=p+1,a=2,b=2,r=1/G,nuprobs=
 # - probs: matrix with niter-burnin rows and G columns with posterior draws for the mixing probabilities
 # - probcluster: matrix with nrow(x) rows and G columns with posterior probabilities that each observation belongs to each cluster (Rao-Blackwellized)
 # - cluster: if returnCluster==TRUE, a matrix with niter-burnin rows and nrow(x) columns with latent cluster allocations at each MCMC iteration. If returnCluster==FALSE, NA is returned.
-mixskewtGibbs <- function(x, G, clusini='kmedians', priorParam=skewtprior(ncol(x),G), niter, burnin=round(niter/10), ttype='independent', returnCluster=FALSE, verbose=TRUE) {
+mixskewtGibbs <- function(x, G, clusini='kmedians', priorParam=skewtprior(ncol(x),G), niter, burnin=round(niter/10), ttype='independent', returnCluster=FALSE, relabel='ECR', verbose=TRUE) {
     #require(mvtnorm)
     if (!(ttype %in% c('independent','dependent'))) stop("ttype must be equal to 'independent' or 'dependent'")
     p <- ncol(x); n <- nrow(x)
@@ -581,9 +584,9 @@ mixskewtGibbs <- function(x, G, clusini='kmedians', priorParam=skewtprior(ncol(x
     if (returnCluster) ans$cluster <- cluster
     fit <- new("skewtFit",ans)
     #Fix potential label switching issues
-    if (G>1) {
+    if ((G>1) & (relabel!='none')) {
         if (verbose) { cat('\n'); cat('Post-processing label-switching...') }
-        fit <- fixLabelSwitch(fit,x=x,z=cluster,method='RW')
+        fit <- fixLabelSwitch(fit,x=x,z=cluster,method=relabel)
     }
     #Compute cluster probabilities
     fit$probcluster <- clusterprobs(fit, x=x)
