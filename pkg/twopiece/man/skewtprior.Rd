@@ -15,10 +15,11 @@ The prior is given by
  probs ~ Symmetric Dirichlet(r), where r is a scalar
 }
 \usage{
-skewtprior(p,m=rep(0,p),g=1,Q=diag(p),q=p+1,a=2,b=2,r=1/p,nuprobs=priornuJS(1:30,k=1.2,numax=30))
+skewtprior(p,G,m=rep(0,p),g=1,Q=diag(p),q=p+1,a=2,b=2,r=1/G,nuprobs=priornuJS(1:30,k=1.2,numax=30))
 }
 \arguments{
   \item{p}{Number of variables in the observed data}
+  \item{G}{Number of mixture components}
   \item{m}{Location parameter for prior on mu given Sigma}
   \item{g}{Scale parameter for prior on mu given Sigma}
   \item{Q}{Scale matrix for Inverse Wishart prior on Sigma}

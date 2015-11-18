@@ -6,7 +6,7 @@ Metropolis-Hastings within Gibbs algorithm to obtain posterior samples for
 a mixture of multivariate skew-t's.
 }
 \usage{
-mixskewtGibbs(x, G, clusini='kmedians', priorParam=skewtprior(ncol(x)), niter, burnin=round(niter/10), ttype='independent', returnCluster=FALSE, verbose=TRUE)
+mixskewtGibbs(x, G, clusini='kmedians', priorParam=skewtprior(ncol(x),G), niter, burnin=round(niter/10), ttype='independent', returnCluster=FALSE, verbose=TRUE)
 }
 \arguments{
 \item{x}{Observed data matrix (observations in rows, variables in columns)}

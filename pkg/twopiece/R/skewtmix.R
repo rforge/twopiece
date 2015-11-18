@@ -397,12 +397,13 @@ rinvwishart <- function(nu, S, Sinv) {
 #  probs ~ Symmetric Dirichlet(r), where r is a scalar
 # Input
 # - p: dimension of the observed data
+# - G: number of components
 # - m, g: parameters for prior on mu given Sigma
 # - Q, q: parameters for prior on Sigma
 # - a, b: parameter for prior on asymetry parameter
 # - r: parameter for symmetric Dirichlet prior on mixing probabilities
 # - nuprobs: vector where P(nu=j)=nuprobs[j]. Names can be provided, else it is assumed that support of nu ranges from 1 to length(nuprobs)
-skewtprior <- function(p,m=rep(0,p),g=1,Q=diag(p),q=p+1,a=2,b=2,r=1/p,nuprobs=priornuJS(1:30,k=2.78,numax=30)) {
+skewtprior <- function(p,G,m=rep(0,p),g=1,Q=diag(p),q=p+1,a=2,b=2,r=1/G,nuprobs=priornuJS(1:30,k=2.78,numax=30)) {
     if (length(m) != p) stop("m has the wrong length")
     if (length(g)>1) stop("g must have length 1")
     if (!is.matrix(Q)) stop("Q must be a matrix")
@@ -441,7 +442,7 @@ skewtprior <- function(p,m=rep(0,p),g=1,Q=diag(p),q=p+1,a=2,b=2,r=1/p,nuprobs=pr
 # - probs: matrix with niter-burnin rows and G columns with posterior draws for the mixing probabilities
 # - probcluster: matrix with nrow(x) rows and G columns with posterior probabilities that each observation belongs to each cluster (Rao-Blackwellized)
 # - cluster: if returnCluster==TRUE, a matrix with niter-burnin rows and nrow(x) columns with latent cluster allocations at each MCMC iteration. If returnCluster==FALSE, NA is returned.
-mixskewtGibbs <- function(x, G, clusini='kmedians', priorParam=skewtprior(ncol(x)), niter, burnin=round(niter/10), ttype='independent', returnCluster=FALSE, verbose=TRUE) {
+mixskewtGibbs <- function(x, G, clusini='kmedians', priorParam=skewtprior(ncol(x),G), niter, burnin=round(niter/10), ttype='independent', returnCluster=FALSE, verbose=TRUE) {
     #require(mvtnorm)
     if (!(ttype %in% c('independent','dependent'))) stop("ttype must be equal to 'independent' or 'dependent'")
     p <- ncol(x); n <- nrow(x)
