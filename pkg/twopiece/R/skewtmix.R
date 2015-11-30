@@ -20,6 +20,21 @@ setMethod("coef", signature(object="skewtFit"), function(object, ...) {
 }
 )
 
+setGeneric("coefMedian", function(object,...) standardGeneric("coefMedian"))
+
+setMethod("coefMedian", signature(object="skewtFit"), function(object, ...) {
+  colMedians <- function(z,...) apply(z,2,'median',...)
+  mu <- lapply(object$mu,colMedians)
+  p <- length(mu[[1]])
+  diag <- 1:p; nondiag <- (p+1):ncol(object$Sigma[[1]])
+  Sigma <- lapply(object$Sigma, function(z) { vec2matrix(colMedians(z),diag=diag,nondiag=nondiag) })
+  alpha <- lapply(object$alpha,colMedians)
+  nu <- colMedians(object$nu)
+  probs <- colMedians(object$probs)
+  return(list(mu=mu,Sigma=Sigma,alpha=alpha,nu=nu,probs=probs))
+}
+)
+
 
 #Compute cluster probabilities under skew-t mixture, averaging over posterior draws contained in x
 # - fit: object of type skewtFit
