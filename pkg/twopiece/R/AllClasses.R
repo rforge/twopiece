@@ -6,6 +6,25 @@
 
 
 ########################################################################################################
+# CLASS normFit
+########################################################################################################
+
+setClass("normFit", representation("list"), prototype = prototype(elementType = "list"), contains="list")
+
+valid_normFit <- function(object) {
+  msg <- NULL
+  if (!all(c('mu','Sigma','probs','probcluster','G') %in% names(object))) msg <- "normFit object missing either mu, Sigma, probs, probscluster or G"
+  if (length(object$mu)!=object$G) msg <- "mu has the wrong length"
+  if (length(object$Sigma)!=object$G) msg <- "Sigma has the wrong length"
+  if (ncol(object$probs) != object$G) msg <- "probs has the wrong number of columns"
+  if(!(is.null(msg))) { TRUE } else { msg }
+}
+
+setValidity("normFit", valid_normFit)
+
+
+
+########################################################################################################
 # CLASS skewtFit
 ########################################################################################################
 

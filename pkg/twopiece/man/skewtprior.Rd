@@ -15,7 +15,8 @@ The prior is given by
  probs ~ Symmetric Dirichlet(r), where r is a scalar
 }
 \usage{
-skewtprior(p,G,m=rep(0,p),g=1,Q=diag(p),q=p+1,a=2,b=2,r=1/G,nuprobs=priornuJS(1:30,k=2.78,numax=30))
+skewtprior(p, G, m=rep(0,p), g=1, Q=diag(p), q=p+1, a=2, b=2, r=1/G,
+nuprobs=priornuJS(1:30,k=2.78,numax=30))
 }
 \arguments{
   \item{p}{Number of variables in the observed data}
@@ -45,7 +46,8 @@ x follows a standard t with nu degrees of freedom.
 List with elements mu, Sigma, alpha, nu and probs containing the prior parameters.
 }
 \references{
-Rossell D., Steel M.F.J. Continuous non-Gassian mixtures. In Handbook of Cluster Analysis, CRC Press.
+Rossell D., Steel M.F.J. Continuous mixtures with skewness and heavy
+tails. Handbook of Mixture Analysis, Chapter 10, CRC Press 2018.
 }
 \examples{
 ##See help(mixskewtGibbs)

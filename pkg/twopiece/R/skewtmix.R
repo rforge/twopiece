@@ -100,7 +100,7 @@ vec2matrix <- function(vec,diag,nondiag) {
 }
 
 
-fixLabelSwitch <- function(fit,x,z,method='ECR') {
+setMethod("fixLabelSwitch", signature(fit="skewtFit"), function(fit,x,z,method='ECR') {
     #Permute component labels to avoid label switching issues. Components relabelled to have increasing projection on first PC
     # Input
     # - fit: object of type skewtFit
@@ -108,7 +108,6 @@ fixLabelSwitch <- function(fit,x,z,method='ECR') {
     # - z: latent cluster allocations at each MCMC iteration
     # - method: 'ECR' for Papastamoulis-Iliopoulos 2010 to make simulated z similar to pivot z (taken from last iteration); 'RW' for Rodriguez-Walker (2014) relabelling (loss function aimed at preserving cluster means), 'PC' for identifiability constraint based on projection of location parameters on first principal component
     # Output: object of type skewtFit with relabelled components
-    if (class(fit) != 'skewtFit') stop("fit must be of class skewtFit")
     if (method=='ECR') {
         r <- ecr(z[nrow(z),],z=z,K=fit$G)[[1]]
     } else if (method=='RW') {
@@ -133,7 +132,7 @@ fixLabelSwitch <- function(fit,x,z,method='ECR') {
     }
     return(fitnew)
 }
-
+)
 
 
 ################################################################################################################
@@ -143,6 +142,7 @@ fixLabelSwitch <- function(fit,x,z,method='ECR') {
 #Univariate skew T density
 # When param=='eps': dt(x;mu,s/(1-alpha),nu) I(x>=mu) + dt(x;mu,s/(1+alpha),nu) I(x<mu)
 # When param=='isf': dt(x;mu,s*alpha,nu) I(x>=mu) + dt(x;mu,s/alpha,nu) I(x<mu)
+
 dskewtuniv <- function(x,mu,s,alpha,nu,param='eps',logscale=FALSE) {
     if (param=='eps') {
         ans <- dtp3(x,mu=mu,par1=s,par2=alpha,FUN=function(z,log) dt(z,df=nu,log=log),param="eps",log=logscale)

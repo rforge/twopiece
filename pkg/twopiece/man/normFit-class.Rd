@@ -1,14 +1,14 @@
-\name{skewtFit-class}
+\name{normFit-class}
 \Rdversion{1.1}
 \docType{class}
-\alias{skewtFit}
-\alias{skewtFit-class}
-\alias{coef,skewtFit-method}
-\alias{show,skewtFit-method}
-\alias{[,skewtFit,ANY,ANY,ANY-method}
-\alias{[[,skewtFit-method}
+\alias{normFit}
+\alias{normFit-class}
+\alias{coef,normFit-method}
+\alias{show,normFit-method}
+\alias{[,normFit,ANY,ANY,ANY-method}
+\alias{[[,normFit-method}
 
-\title{Class "skewtFit"}
+\title{Class "normFit"}
 \description{
 Stores the Markov Chain Monte Carlo output from fitting a mixture of
 multivariate skew-t distributions.
@@ -17,7 +17,7 @@ for convenience (see below).
 }
 \section{Objects from the Class}{
 Objects from this class are automatically created
-as the output of mixskewtGibbs.
+as the output of mixnormGibbs.
 }
 \section{Slots}{
   \describe{
@@ -29,17 +29,17 @@ as the output of mixskewtGibbs.
 }
 \section{Methods}{
   \describe{
-    \item{show}{\code{signature(object = "skewtFit")}: Displays
+    \item{show}{\code{signature(object = "normFit")}: Displays
       general information about the object. }
 
     \item{"["}{Selects an element of the list}
 
     \item{"[["}{Selects an element of the list}
 
-    \item{coef}{\code{signature(object = "skewtFit")}:
+    \item{coef}{\code{signature(object = "normFit")}:
     Computes the posterior mean of all model parameters}
 
-    \item{clusterprobs}{\code{signature(fit = "skewtFit")}:
+    \item{clusterprobs}{\code{signature(fit = "normFit")}:
     Computes posterior cluster probabilities on a specified grid of value.}
   }
 }
@@ -67,13 +67,13 @@ Below is a description of what each element in the list contains:
     - probcluster: Matrix with the estimated posterior probabilities that
     each observation belongs to each cluster (Rao-Blackwellized)
 
-    - cluster: if mixskewtGibbs was called with \code{returnCluster=TRUE}
+    - cluster: if mixnormGibbs was called with \code{returnCluster=TRUE}
     cluster contains the latent cluster allocations at each Gibbs iteration
     (iterations in rows, observations in columns). Else it contains NA.
 
     - G: Assumed number of mixture components
 
-    - ttype: Value of argument \code{ttype} passed to \code{mixskewtGibbs},
+    - ttype: Value of argument \code{ttype} passed to \code{mixnormGibbs},
     'independent' indicates that the iskew-t was used, 'dependent' the dskew-t.
 }
 \references{
@@ -84,9 +84,9 @@ tails. Handbook of Mixture Analysis, Chapter 10, CRC Press 2018.
 David Rossell
 }
 \seealso{
-See also \code{\link{mixskewtGibbs}}.
+See also \code{\link{mixnormGibbs}}.
 }
 \examples{
-showClass("skewtFit")
+showClass("normFit")
 }
 \keyword{classes}

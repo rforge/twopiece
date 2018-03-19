@@ -1,13 +1,13 @@
-\name{mixskewtGibbs}
-\alias{mixskewtGibbs}
+\name{mixnormGibbs}
+\alias{mixnormGibbs}
 \title{MH-within-Gibbs sampling for mixture of multivariate skew t's}
 \description{
 Metropolis-Hastings within Gibbs algorithm to obtain posterior samples for
 a mixture of multivariate skew-t's.
 }
 \usage{
-mixskewtGibbs(x, G, clusini='kmedians', priorParam=skewtprior(ncol(x),G), niter,
-burnin=round(niter/10), ttype='independent', returnCluster=FALSE, relabel='ECR',
+mixnormGibbs(x, G, clusini='kmedians', priorParam=normprior(ncol(x),G),
+niter, burnin=round(niter/10), returnCluster=FALSE, relabel='ECR',
 verbose=TRUE)
 }
 \arguments{
@@ -28,9 +28,6 @@ containing prior parameters. See help(skewtprior)}
 
 \item{burnin}{Number of burn-in iterations (i.e. initial iterations to be discarded)}
 
-\item{ttype}{Set to 'independent' for iskew-t, to 'dependent' for dskew-t.
-See help(dskewt) for details}
-
 \item{returnCluster}{If set to TRUE the allocated cluster at each MCMC
 iteration is returned. Note that this can be memory-consuming if nrow(x) is large}
 
@@ -46,14 +43,18 @@ See help(label.switching) for details.}
 \item{verbose}{Set to TRUE to output iteration progress}
 }
 \value{
-Object of class skewtFit, i.e. essentially a list with elements
-mu, Sigma, alpha, nu and probs storing the posterior draws.
+Object of class normFit, i.e. essentially a list with elements
+mu, Sigma and probs storing the posterior draws.
 Posterior means can be extracted with coef() and cluster probabilities
 with clusterprobs().
 }
-\seealso{help("skewtFit-class"), help("clusterprobs")}
+\seealso{help("normFit-class"), help("clusterprobs")}
 \references{
-Rossell D., Steel M.F.J. Continuous non-Gassian mixtures. In Handbook of Cluster Analysis, CRC Press.
+Fuquene J., Steel M.F.J., Rossell D. On choosing mixture components via
+non-local priors. arxiv:1604.00314, 2018
+
+Rossell D., Steel M.F.J. Continuous mixtures with skewness and heavy
+tails. Handbook of Mixture Analysis, Chapter 10, CRC Press 2018.
 }
 \examples{
 
@@ -61,15 +62,11 @@ library(twopiece)
 set.seed(1)
 n <- 1000; probs <- c(2/3,1/3)
 mu1 <- c(0,0); S1 <- matrix(c(1,0,0,1),nrow=2)
-alpha1 <- c(0,0); nu1 <- 100
 mu2 <- c(3,3); S2 <- matrix(c(1,.5,.5,1),nrow=2)
-alpha2 <- c(-.5,0); nu2 <- 100
 mu <- list(mu1,mu2)
 Sigma <- list(S1,S2)
-alpha <- list(alpha1,alpha2)
-nu <- list(nu1,nu2)
-xsim <- rmixskewt(n,mu=mu,Sigma=Sigma,alpha=alpha,nu=nu,probs=probs,param='eps')
-fit <- mixskewtGibbs(xsim$x,G=2,clusini='kmedians',niter=50)
+xsim <- rmixnorm(n,mu=mu,Sigma=Sigma,probs=probs)
+fit <- mixnormGibbs(xsim$x,G=2,clusini='kmedians',niter=100)
 
 #Posterior means
 coef(fit)
@@ -85,7 +82,7 @@ x1seq <- seq(-3,8,length=20); x2seq <- seq(-4,7,length=20)
 xgrid <- expand.grid(x1seq,x2seq)
 probgrid <- clusterprobs(fit, x=xgrid)
 filled.contour(x=x1seq,y=x2seq,z=matrix(probgrid[,1],nrow=length(x1seq)),
- plot.axes={ axis(1); axis(2); points(xsim$x,pch=xsim$cluster)})
+plot.axes={ axis(1); axis(2); points(xsim$x,pch=xsim$cluster)})
 }
 \keyword{ cluster }
 \keyword{ distribution }

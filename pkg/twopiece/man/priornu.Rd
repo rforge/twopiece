@@ -49,8 +49,8 @@ of freedom of a t distribution. Bayesian analysis, 9(1):197-200, 2014.
 library(twopiece)
 
 nuseq <- 1:30
-plot(nuseq, priornuJS(nuseq,k=1.2,numax=30), ylab='Prior density', xlab=expression(nu), cex.lab=1.2)
+plot(nuseq, priornuJS(nuseq,k=1.2,numax=30), ylab='Prior density', xlab=expression(nu))
 points(nuseq, priornuVW(nuseq,numax=30), col='grey', pch=16)
-legend('topright',c('Juarez-Steel (k=1.2)','Villa-Walker'),pch=c(1,16),col=c('black','grey'), cex=1.25)
+legend('topright',c('Juarez-Steel (k=1.2)','Villa-Walker'),pch=c(1,16),col=c('black','grey'))
 }
 \keyword{ distribution }

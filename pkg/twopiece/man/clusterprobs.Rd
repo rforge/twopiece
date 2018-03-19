@@ -1,6 +1,7 @@
 \name{clusterprobs}
 \alias{clusterprobs}
 \alias{clusterprobs-methods}
+\alias{clusterprobs,normFit-method}
 \alias{clusterprobs,skewtFit-method}
 
 \title{
@@ -14,8 +15,8 @@ skew-t distributions, obtained by averaging over Gibbs draws.
   clusterprobs(fit, x, iter)
 }
 \arguments{
-  \item{fit}{Object of type skewtFit containing the Gibbs draws,
-  as returned by mixskewtGibbs.}
+  \item{fit}{Object of class normFit or skewtFit containing Gibbs draws,
+  as returned by mixnormGibbs or mixskewtGibbs}
   \item{x}{Data points at which to evaluate the probabilities.
   \code{ncol(x)} must match \code{ncol(x)} when calling \code{mixskewtGibbs}}
   \item{iter}{To avoid excessive time only a subset of the Gibbs iterations are
@@ -29,9 +30,10 @@ skew-t distributions, obtained by averaging over Gibbs draws.
 David Rossell
 }
 \seealso{
-\code{\link{mixskewtGibbs}}
+\code{\link{mixnormGibbs}}, \code{\link{mixskewtGibbs}}
 }
 \examples{
+#See help(mixnormGibbs)
 #See help(mixskewtGibbs)
 }
 \keyword{ cluster }
