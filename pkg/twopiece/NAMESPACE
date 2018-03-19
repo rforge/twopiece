@@ -1,7 +1,8 @@
+importFrom("stats","coef","cov","dnorm","dt","integrate","kmeans","median","pnorm","pt","qnorm","qt","rbeta","rgamma","rmultinom","rnorm","rt","runif","rWishart")
 import(flexclust,methods,mvtnorm)
 importFrom(mclust,Mclust)
 importFrom(label.switching,dataBased,ecr)
 importFrom(ellipse,ellipse)
 
-export(dtp3, dtp4, ptp3, ptp4, qtp3, qtp4, rtp3, rtp4, clusterprobs, dskewt, dmixskewt, mixskewtGibbs, priornuJS, priornuVW, rskewt, rmixskewt, skewtprior)
+export(dtp3, dtp4, ptp3, ptp4, qtp3, qtp4, rtp3, rtp4, clusterprobs, dskewt, dmixskewt, mixnormGibbs, mixskewtGibbs, priornuJS, priornuVW, rskewt, rmixnorm, rmixskewt, normprior, skewtprior)
 
