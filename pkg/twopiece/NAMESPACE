@@ -4,5 +4,5 @@ importFrom(mclust,Mclust)
 importFrom(label.switching,dataBased,ecr)
 importFrom(ellipse,ellipse)
 
-export(dtp3, dtp4, ptp3, ptp4, qtp3, qtp4, rtp3, rtp4, clusterprobs, dskewt, dmixskewt, mixnormGibbs, mixskewtGibbs, priornuJS, priornuVW, rskewt, rmixnorm, rmixskewt, normprior, skewtprior)
+export(dtp3, dtp4, ptp3, ptp4, qtp3, qtp4, rtp3, rtp4, clusterprobs, dskewt, dmixnorm, dmixskewt, mixnormGibbs, mixskewtGibbs, priornuJS, priornuVW, rskewt, rmixnorm, rmixskewt, normprior, skewtprior)
 
