@@ -1,6 +1,6 @@
 \name{normprior}
 \alias{normprior}
-\title{Prior parameters for mixture of multivariate skew-t's.
+\title{Prior parameters for a multivariate Normal mixture
 }
 \description{
 normprior creates a list with prior parameters required by mixnormGibbs.

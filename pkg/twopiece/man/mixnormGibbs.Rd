@@ -1,9 +1,9 @@
 \name{mixnormGibbs}
 \alias{mixnormGibbs}
-\title{MH-within-Gibbs sampling for mixture of multivariate skew t's}
+\title{Gibbs sampling for multivariate Normal mixture}
 \description{
-Metropolis-Hastings within Gibbs algorithm to obtain posterior samples for
-a mixture of multivariate skew-t's.
+Gibbs sampling to obtain posterior samples for
+a multivariate Normal mixture
 }
 \usage{
 mixnormGibbs(x, G, clusini='kmedians', priorParam=normprior(ncol(x),G),
@@ -22,7 +22,7 @@ The latter is based on Mclust, which is initialized by hierarchical clustering
 and can hence be slow}
 
 \item{priorParam}{List with named elements 'mu', 'Sigma', 'alpha', 'nu', 'probs'
-containing prior parameters. See help(skewtprior)}
+containing prior parameters. See help(normprior)}
 
 \item{niter}{Number of Gibbs iterations}
 

@@ -216,12 +216,13 @@ mixnormGibbs <- function(x, G, clusini='kmedians', priorParam=normprior(ncol(x),
     if (G>1) {
         if (is.character(clusini)) {
             if (clusini=='kmedians') {
-                z <- predict(cclust(x, k=G, dist='manhattan', method='kmeans'))
+                z <- try(predict(cclust(x, k=G, dist='manhattan', method='kmeans')))
             } else if (clusini=='kmeans') {
                 z <- kmeans(x, centers=G)$cluster
             } else if (clusini=='em') {
-                z <- Mclust(x, G=G, modelNames='VVV')$classification
+                z <- try(Mclust(x, G=G, modelNames='VVV')$classification)
             } else stop("Invalid value for 'clusini'")
+            if (class(z)=='try-error') z <- kmeans(x, centers=G)$cluster
         } else {
             if (length(clusini) != nrow(x)) stop("length(clusini) must be equal to nrow(x)")
             z <- as.integer(factor(clusini))
