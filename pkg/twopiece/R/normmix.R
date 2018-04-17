@@ -11,7 +11,7 @@ setMethod("show", signature(object="normFit"), function(object) {
 setMethod("coef", signature(object="normFit"), function(object, ...) {
   mu <- lapply(object$mu,colMeans)
   p <- length(mu[[1]])
-  diag <- 1:p; nondiag <- (p+1):ncol(object$Sigma[[1]])
+  diag <- 1:p; if (p>1) { nondiag <- (p+1):ncol(object$Sigma[[1]]) } else { nondiag= integer(0) }
   Sigma <- lapply(object$Sigma, function(z) { vec2matrix(colMeans(z),diag=diag,nondiag=nondiag) })
   probs <- colMeans(object$probs)
   return(list(mu=mu,Sigma=Sigma,probs=probs))
@@ -25,7 +25,7 @@ setMethod("coefMedian", signature(object="normFit"), function(object, ...) {
   colMedians <- function(z,...) apply(z,2,'median',...)
   mu <- lapply(object$mu,colMedians)
   p <- length(mu[[1]])
-  diag <- 1:p; nondiag <- (p+1):ncol(object$Sigma[[1]])
+  diag <- 1:p; if (p>1) { nondiag <- (p+1):ncol(object$Sigma[[1]]) } else { nondiag= integer(0) }
   Sigma <- lapply(object$Sigma, function(z) { vec2matrix(colMedians(z),diag=diag,nondiag=nondiag) })
   probs <- colMedians(object$probs)
   return(list(mu=mu,Sigma=Sigma,probs=probs))
@@ -49,15 +49,26 @@ setMethod("clusterprobs", signature(fit='normFit'), function(fit, x, iter) {
     if ((min(iter)<1) | max(iter)>nrow(fit$mu[[1]])) stop("Specified iter values are out of valid range")
     if (missing(x)) stop("x values must be provided")
     G <- fit$G; p <- ncol(fit$mu[[1]])
-    diag <- 1:p; nondiag <- (p+1):ncol(fit$Sigma[[1]])
-    S <- lapply(1:G, function(i) { ans <- apply(fit$Sigma[[i]][iter,], 1, vec2matrix, diag=diag, nondiag=nondiag); array(as.vector(ans),dim=c(p,p,ncol(ans))) } )
-    proboneiter <- function(i) {
-        dx <- sapply(1:G,function(g) dmvnorm(x,fit$mu[[g]][iter[i],],S[[g]][,,i],log=TRUE))
-        dx <- t(t(dx)+log(fit$probs[i,]))
-        dx <- exp(dx - apply(dx,1,max))
-        dx/rowSums(dx)
+    if (p>1) {
+        diag <- 1:p
+        nondiag <- (p+1):ncol(fit$Sigma[[1]])
+        S <- lapply(1:G, function(i) { ans <- apply(fit$Sigma[[i]][iter,,], 1, vec2matrix, diag=diag, nondiag=nondiag); array(as.vector(ans),dim=c(p,p,ncol(ans))) } )
+        proboneiter <- function(i) {
+            dx <- sapply(1:G,function(g) dmvnorm(x,fit$mu[[g]][iter[i],],S[[g]][,,i],log=TRUE))
+            dx <- t(t(dx)+log(fit$probs[i,]))
+            dx <- exp(dx - rowMaxs(dx))
+            dx/rowSums(dx)
+        }
+        ans <- lapply(1:length(iter),function(i) proboneiter(i))
+    } else {
+        proboneiteruniv <- function(i) {
+            dx <- sapply(1:G,function(g) dmvnorm(x,fit$mu[[g]][iter[i],],fit$Sigma[[g]][iter[i],,drop=FALSE],log=TRUE))
+            dx <- t(t(dx)+log(fit$probs[i,]))
+            dx <- exp(dx - rowMaxs(dx))
+            dx/rowSums(dx)
+        }
+        ans <- lapply(1:length(iter),function(i) proboneiteruniv(i))
     }
-    ans <- lapply(1:length(iter),function(i) proboneiter(i))
     ans <- Reduce('+',ans)/length(ans)
     return(ans)
 }
@@ -73,7 +84,7 @@ loglNorm <- function(fit,x) {
     #log-likelihood at each MCMC iteration
     if (class(fit) != 'normFit') stop("fit must be of class normFit")
     G <- fit$G; p <- ncol(fit$mu[[1]])
-    diag <- 1:p; nondiag <- (p+1):ncol(fit$Sigma[[1]])
+    diag <- 1:p; if (p>1) { nondiag <- (p+1):ncol(fit$Sigma[[1]]) } else { nondiag= integer(0) }
     S <- lapply(1:G, function(i) { ans <- apply(fit$Sigma[[i]], 1, vec2matrix, diag=diag, nondiag=nondiag); array(as.vector(ans),dim=c(p,p,ncol(ans))) } )
     lhoodoneiter <- function(i) {
         dx <- sapply(1:G,function(g) dmvnorm(x,fit$mu[[g]][i,],S[[g]][,,i],log=TRUE))
@@ -239,7 +250,7 @@ mixnormGibbs <- function(x, G, clusini='kmedians', priorParam=normprior(ncol(x),
     for (i in 1:G) {
         sel <- which(z==i)
         if (length(sel)>1) {
-            mucur[[i]] <- apply(x[sel,],2,median); Scur[[i]] <- cov(x[sel,])
+            mucur[[i]] <- apply(x[sel,,drop=FALSE],2,median); Scur[[i]] <- cov(x[sel,,drop=FALSE])
         } else {
             mucur[[i]] <- m; Scur[[i]] <- Q / (q+p+1)
         }
@@ -254,7 +265,8 @@ mixnormGibbs <- function(x, G, clusini='kmedians', priorParam=normprior(ncol(x),
         #Sample latent cluster indicators z
         dx <- sapply(1:G,function(g) dmvnorm(x,mucur[[g]],Scur[[g]],log=TRUE))
         dx <- t(t(dx)+log(probscur))
-        dx <- exp(dx - apply(dx,1,max))
+        dx <- exp(dx - rowMaxs(dx))
+        #dx <- exp(dx - apply(dx,1,max))
         dx <- dx/rowSums(dx)
         z <- apply(dx,1,function(pp) match(TRUE,runif(1)<cumsum(pp)))
         tab <- table(z); zcount[1:G] <- 0; zcount[names(tab)] <- tab
@@ -263,7 +275,7 @@ mixnormGibbs <- function(x, G, clusini='kmedians', priorParam=normprior(ncol(x),
         #Sample mu, Sigma
         for (g in 1:G) {
             sel <- (z==g)
-            if (length(sel)>0) {
+            if (sum(sel)>0) {
                 newparam <- rmuSigmaNormGibbs(x[sel,,drop=FALSE],m=m,g=gprior,q=q,Q=Q)
                 Scur[[g]] <- newparam$Sigma
                 mucur[[g]] <- newparam$mu
@@ -318,7 +330,7 @@ rmuSigmaNormGibbs <- function(x,m,g,q,Q) {
     # - mu: sampled value of mu
     # - Sigma: sampled value of Sigma
     n= nrow(x)
-    if (n>1) { Spost= Q + cov(x) * (n-1) } else { Spost= x %*% t(x) }
+    if (n>1) { Spost= Q + cov(x) * (n-1) } else { Spost= Q }
     Sigma= rinvwishart(q+nrow(x), Spost)
     w= n/(n+1/g)
     mu= rmvnorm(1, colMeans(x)*w + m*(1-w), Sigma/(n+1/g))

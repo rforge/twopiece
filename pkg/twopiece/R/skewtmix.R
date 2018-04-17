@@ -11,7 +11,7 @@ setMethod("show", signature(object="skewtFit"), function(object) {
 setMethod("coef", signature(object="skewtFit"), function(object, ...) {
   mu <- lapply(object$mu,colMeans)
   p <- length(mu[[1]])
-  diag <- 1:p; nondiag <- (p+1):ncol(object$Sigma[[1]])
+  diag <- 1:p; if (p>1) { nondiag <- (p+1):ncol(object$Sigma[[1]]) } else { nondiag= integer(0) }
   Sigma <- lapply(object$Sigma, function(z) { vec2matrix(colMeans(z),diag=diag,nondiag=nondiag) })
   alpha <- lapply(object$alpha,colMeans)
   nu <- colMeans(object$nu)
@@ -26,7 +26,7 @@ setMethod("coefMedian", signature(object="skewtFit"), function(object, ...) {
   colMedians <- function(z,...) apply(z,2,'median',...)
   mu <- lapply(object$mu,colMedians)
   p <- length(mu[[1]])
-  diag <- 1:p; nondiag <- (p+1):ncol(object$Sigma[[1]])
+  diag <- 1:p; if (p>1) { nondiag <- (p+1):ncol(object$Sigma[[1]]) } else { nondiag= integer(0) }
   Sigma <- lapply(object$Sigma, function(z) { vec2matrix(colMedians(z),diag=diag,nondiag=nondiag) })
   alpha <- lapply(object$alpha,colMedians)
   nu <- colMedians(object$nu)
@@ -52,15 +52,25 @@ setMethod("clusterprobs", signature(fit='skewtFit'), function(fit, x, iter) {
     if ((min(iter)<1) | max(iter)>nrow(fit$mu[[1]])) stop("Specified iter values are out of valid range")
     if (missing(x)) stop("x values must be provided")
     G <- fit$G; p <- ncol(fit$mu[[1]])
-    diag <- 1:p; nondiag <- (p+1):ncol(fit$Sigma[[1]])
-    S <- lapply(1:G, function(i) { ans <- apply(fit$Sigma[[i]][iter,], 1, vec2matrix, diag=diag, nondiag=nondiag); array(as.vector(ans),dim=c(p,p,ncol(ans))) } )
-    proboneiter <- function(i) {
-        dx <- sapply(1:G,function(g) dskewt(x,mu=fit$mu[[g]][iter[i],],Sigma=S[[g]][,,i],alpha=fit$alpha[[g]][iter[i],],nu=fit$nu[iter[i],g],param='eps',logscale=TRUE,ttype=fit$ttype))
-        dx <- t(t(dx)+log(fit$probs[i,]))
-        dx <- exp(dx - apply(dx,1,max))
-        dx/rowSums(dx)
+    if (p>1) {
+        diag <- 1:p; nondiag <- (p+1):ncol(fit$Sigma[[1]])
+        S <- lapply(1:G, function(i) { ans <- apply(fit$Sigma[[i]][iter,,drop=FALSE], 1, vec2matrix, diag=diag, nondiag=nondiag); array(as.vector(ans),dim=c(p,p,ncol(ans))) } )
+        proboneiter <- function(i) {
+            dx <- sapply(1:G,function(g) dskewt(x,mu=fit$mu[[g]][iter[i],],Sigma=S[[g]][,,i],alpha=fit$alpha[[g]][iter[i],],nu=fit$nu[iter[i],g],param='eps',logscale=TRUE,ttype=fit$ttype))
+            dx <- t(t(dx)+log(fit$probs[i,]))
+            dx <- exp(dx - rowMaxs(dx))
+            dx/rowSums(dx)
+        }
+        ans <- lapply(1:length(iter),function(i) proboneiter(i))
+    } else {
+        proboneiteruniv <- function(i) {
+            dx <- sapply(1:G,function(g) dskewt(x,mu=fit$mu[[g]][iter[i],],Sigma=fit$Sigma[[g]][iter[i],,drop=FALSE],alpha=fit$alpha[[g]][iter[i],],nu=fit$nu[iter[i],g],param='eps',logscale=TRUE,ttype=fit$ttype))
+            dx <- t(t(dx)+log(fit$probs[i,]))
+            dx <- exp(dx - rowMaxs(dx))
+            dx/rowSums(dx)
+        }
+        ans <- lapply(1:length(iter),function(i) proboneiteruniv(i))
     }
-    ans <- lapply(1:length(iter),function(i) proboneiter(i))
     ans <- Reduce('+',ans)/length(ans)
     return(ans)
 }
@@ -76,7 +86,7 @@ logl <- function(fit,x) {
     #log-likelihood at each MCMC iteration
     if (class(fit) != 'skewtFit') stop("fit must be of class skewtFit")
     G <- fit$G; p <- ncol(fit$mu[[1]])
-    diag <- 1:p; nondiag <- (p+1):ncol(fit$Sigma[[1]])
+    diag <- 1:p; if (p>1) { nondiag <- (p+1):ncol(fit$Sigma[[1]]) } else { nondiag= integer(0) }
     S <- lapply(1:G, function(i) { ans <- apply(fit$Sigma[[i]], 1, vec2matrix, diag=diag, nondiag=nondiag); array(as.vector(ans),dim=c(p,p,ncol(ans))) } )
     lhoodoneiter <- function(i) {
         dx <- sapply(1:G,function(g) dskewt(x,mu=fit$mu[[g]][i,],Sigma=S[[g]][,,i],alpha=fit$alpha[[g]][i,],nu=fit$nu[i,g],param='eps',logscale=TRUE,ttype=fit$ttype))
@@ -224,7 +234,7 @@ dmixskewt <- function(x,mu,Sigma,alpha,nu,probs,param='eps',logscale=FALSE,ttype
     if (is.vector(x)) x <- matrix(x,nrow=1)
     logd <- matrix(NA,nrow=nrow(x),ncol=K)
     for (i in 1:K) { logd[,i] <- dskewt(x,mu=mu[[i]],Sigma=Sigma[[i]],alpha=alpha[[i]],nu=nu[[i]],param=param,logscale=TRUE,ttype=ttype) + log(probs[i]) }
-    ct <- apply(logd,1,max)
+    ct <- rowMaxs(logd)
     ans <- exp(ct) * rowSums(exp(logd-ct))
     if (logscale) ans <- log(ans)
     return(ans)
@@ -474,12 +484,13 @@ mixskewtGibbs <- function(x, G, clusini='kmedians', priorParam=skewtprior(ncol(x
     if (G>1) {
         if (is.character(clusini)) {
             if (clusini=='kmedians') {
-                z <- predict(cclust(x, k=G, dist='manhattan', method='kmeans'))
+                z <- try(predict(cclust(x, k=G, dist='manhattan', method='kmeans')))
             } else if (clusini=='kmeans') {
                 z <- kmeans(x, centers=G)$cluster
             } else if (clusini=='em') {
-                z <- Mclust(x, G=G, modelNames='VVV')$classification
+                z <- try(Mclust(x, G=G, modelNames='VVV')$classification)
             } else stop("Invalid value for 'clusini'")
+            if (class(z)=='try-error') z <- kmeans(x, centers=G)$cluster
         } else {
             if (length(clusini) != nrow(x)) stop("length(clusini) must be equal to nrow(x)")
             z <- as.integer(factor(clusini))
@@ -503,7 +514,7 @@ mixskewtGibbs <- function(x, G, clusini='kmedians', priorParam=skewtprior(ncol(x
         alphacur[[i]] <- rep(0,p)
         #Initialize mu, Sigma
         if (length(sel)>0) {
-            mucur[[i]] <- apply(x[sel,],2,median); Scur[[i]] <- ((tx[,sel] - mucur[[i]]) %*% t(tx[,sel] - mucur[[i]]))/length(sel)
+            mucur[[i]] <- apply(x[sel,,drop=FALSE],2,median); Scur[[i]] <- ((tx[,sel,drop=FALSE] - mucur[[i]]) %*% t(tx[,sel,drop=FALSE] - mucur[[i]]))/length(sel)
             #mucur[[i]] <- colMeans(x[sel,]); Scur[[i]] <- var(x[sel,]) * (nucur[[i]]-2) / nucur[[i]]
         } else {
             mucur[[i]] <- m; Scur[[i]] <- Q / (q+p+1)
@@ -530,7 +541,7 @@ mixskewtGibbs <- function(x, G, clusini='kmedians', priorParam=skewtprior(ncol(x
         #Sample latent cluster indicators z
         dx <- sapply(1:G,function(g) dskewt(x,mu=mucur[[g]],A=Acur[[g]],D=Dcur[[g]],alpha=alphacur[[g]],nu=nucur[[g]],param='eps',logscale=TRUE,ttype=ttype))
         dx <- t(t(dx)+log(probscur))
-        dx <- exp(dx - apply(dx,1,max))
+        dx <- exp(dx - rowMaxs(dx))
         dx <- dx/rowSums(dx)
         z <- apply(dx,1,function(pp) match(TRUE,runif(1)<cumsum(pp)))
         tab <- table(z); zcount[1:G] <- 0; zcount[names(tab)] <- tab
@@ -538,7 +549,7 @@ mixskewtGibbs <- function(x, G, clusini='kmedians', priorParam=skewtprior(ncol(x
         probscur <- as.vector(rdirichlet(1,alpha=r+zcount))
         for (g in 1:G) {
             sel <- which(z==g)
-            if (length(sel)>0) {
+            if (sum(sel)>0) {
                 sqDcurinv <- diag(1/sqrt(diag(Dcur[[g]])),ncol=p)
                 #Update precomputed stuff
                 txstd[,sel] <- sqDcurinv %*% Acur[[g]] %*% (tx[,sel] - mucur[[g]])

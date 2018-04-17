@@ -1,5 +1,6 @@
 importFrom("stats","coef","cov","dnorm","dt","integrate","kmeans","median","pnorm","pt","qnorm","qt","rbeta","rgamma","rmultinom","rnorm","rt","runif","rWishart")
 import(flexclust,methods,mvtnorm)
+importFrom(matrixStats,rowMaxs)
 importFrom(mclust,Mclust)
 importFrom(label.switching,dataBased,ecr)
 importFrom(ellipse,ellipse)
